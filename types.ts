@@ -15,7 +15,8 @@ export interface Rect {
   h: number;
 }
 
-export type EntityType = 'player' | 'enemy' | 'boss' | 'bullet' | 'particle';
+export type EntityType = 'player' | 'enemy' | 'boss' | 'bullet' | 'particle' | 'powerup' | 'sensor';
+export type WeaponType = 'normal' | 'spread' | 'machine';
 
 export interface Entity extends Rect {
   id: string;
@@ -28,6 +29,13 @@ export interface Entity extends Rect {
   hp: number;
   maxHp: number;
   frameTimer?: number; // For animation
+  
+  // Player specific
+  weapon?: WeaponType;
+  invulnerableUntil?: number;
+
+  // Powerup specific
+  subType?: WeaponType; 
 }
 
 export interface Platform extends Rect {

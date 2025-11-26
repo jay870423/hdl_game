@@ -5,13 +5,13 @@ import {
   InputState, 
   Rect, 
   Particle,
-  LevelConfig
+  LevelConfig,
+  WeaponType
 } from '../types';
 import { 
   GRAVITY, 
   PLAYER_SPEED, 
   JUMP_FORCE, 
-  TERMINAL_VELOCITY, 
   BULLET_SPEED,
   ENEMY_SPEED,
   CANVAS_WIDTH, 
@@ -23,8 +23,12 @@ import {
   COLOR_PLAYER_HEADBAND,
   COLOR_PLAYER_PANTS,
   COLOR_BULLET,
-  COLOR_ENEMY
+  COLOR_ENEMY,
+  COLOR_POWERUP_SPREAD,
+  COLOR_POWERUP_MACHINE,
+  COLOR_SENSOR
 } from '../constants';
+import { audio } from '../services/audioService';
 
 export class GameEngine {
   ctx: CanvasRenderingContext2D;
@@ -66,10 +70,17 @@ export class GameEngine {
       isDead: false,
       hp: 3,
       maxHp: 3,
-      frameTimer: 0
+      frameTimer: 0,
+      weapon: 'normal',
+      invulnerableUntil: 0
     };
 
     this.initLevel();
+    audio.startBGM(this.levelConfig.id);
+  }
+
+  stop() {
+      audio.stopBGM();
   }
 
   initLevel() {
@@ -145,33 +156,100 @@ export class GameEngine {
     };
     this.enemies.push(this.boss);
   }
+  
+  spawnFlyingSensor() {
+      // Spawns a flying powerup container from the right side of the screen
+      const y = Math.random() * (CANVAS_HEIGHT / 2) + 50;
+      this.enemies.push({
+          id: Math.random().toString(),
+          type: 'sensor',
+          x: this.cameraX + CANVAS_WIDTH + 50,
+          y: y,
+          w: 30,
+          h: 30,
+          vx: -3,
+          vy: 0,
+          color: COLOR_SENSOR,
+          direction: -1,
+          isDead: false,
+          hp: 1,
+          maxHp: 1,
+          frameTimer: 0
+      });
+  }
+  
+  spawnPowerUp(x: number, y: number) {
+      const type = Math.random() > 0.5 ? 'spread' : 'machine';
+      this.enemies.push({
+          id: Math.random().toString(),
+          type: 'powerup',
+          subType: type,
+          x: x,
+          y: y,
+          w: 24,
+          h: 24,
+          vx: 0,
+          vy: 0,
+          color: type === 'spread' ? COLOR_POWERUP_SPREAD : COLOR_POWERUP_MACHINE,
+          direction: 1,
+          isDead: false,
+          hp: 1,
+          maxHp: 1
+      });
+  }
 
   shoot(shooter: Entity, speed: number, direction: number, isPlayer: boolean) {
-    let vx = direction * speed;
-    let vy = 0;
+    // Weapon Logic
+    let bulletsToFire = [];
     
-    if (isPlayer && this.input.up) {
-      vy = -speed;
-      if (this.input.right) vx = speed;
-      else if (this.input.left) vx = -speed;
-      else vx = 0;
+    if (isPlayer && this.player.weapon === 'spread') {
+         // 3-way shot
+         const angles = this.input.up ? [-0.2, 0, 0.2] : [-0.2, 0, 0.2];
+         // Adjust logic slightly for up vs forward
+         if (this.input.up) {
+             // Firing UP
+             bulletsToFire.push({ vx: -speed * 0.3, vy: -speed });
+             bulletsToFire.push({ vx: 0, vy: -speed });
+             bulletsToFire.push({ vx: speed * 0.3, vy: -speed });
+         } else {
+             // Firing Forward
+             bulletsToFire.push({ vx: speed * direction, vy: -speed * 0.3 });
+             bulletsToFire.push({ vx: speed * direction, vy: 0 });
+             bulletsToFire.push({ vx: speed * direction, vy: speed * 0.3 });
+         }
+    } else {
+        // Normal shot
+        let vx = direction * speed;
+        let vy = 0;
+        
+        if (isPlayer && this.input.up) {
+            vy = -speed;
+            if (this.input.right) vx = speed;
+            else if (this.input.left) vx = -speed;
+            else vx = 0;
+        }
+        bulletsToFire.push({ vx, vy });
     }
 
-    this.bullets.push({
-      id: Math.random().toString(),
-      type: 'bullet',
-      x: shooter.x + shooter.w / 2,
-      y: shooter.y + (isPlayer ? 10 : shooter.h / 2),
-      w: isPlayer ? 8 : 12,
-      h: isPlayer ? 8 : 12,
-      vx,
-      vy,
-      color: isPlayer ? COLOR_BULLET : '#ff0000',
-      direction: direction as 1 | -1,
-      isDead: false,
-      hp: 1,
-      maxHp: 1
+    bulletsToFire.forEach(b => {
+        this.bullets.push({
+          id: Math.random().toString(),
+          type: 'bullet',
+          x: shooter.x + shooter.w / 2,
+          y: shooter.y + (isPlayer ? 10 : shooter.h / 2),
+          w: isPlayer ? (this.player.weapon === 'spread' ? 12 : 8) : 12,
+          h: isPlayer ? (this.player.weapon === 'spread' ? 12 : 8) : 12,
+          vx: b.vx,
+          vy: b.vy,
+          color: isPlayer ? COLOR_BULLET : '#ff0000',
+          direction: direction as 1 | -1,
+          isDead: false,
+          hp: 1,
+          maxHp: 1
+        });
     });
+    
+    if (isPlayer) audio.shoot();
   }
 
   spawnParticles(x: number, y: number, color: string, count: number) {
@@ -202,6 +280,11 @@ export class GameEngine {
     if (this.isGameOver || this.isVictory) return;
     this.frameCount++;
 
+    // Randomly spawn sensor
+    if (this.frameCount % 600 === 0) { // Every ~10 seconds
+        this.spawnFlyingSensor();
+    }
+
     // --- Player Logic ---
     if (this.input.right) {
       this.player.vx = PLAYER_SPEED;
@@ -223,13 +306,16 @@ export class GameEngine {
       
       if (onGround) {
         this.player.vy = JUMP_FORCE;
+        audio.jump();
       }
     }
 
     // Shooting
     if (this.input.fire) {
        const now = Date.now();
-       if (now - this.lastShotTime > 150) { // Fast fire rate
+       const fireRate = this.player.weapon === 'machine' ? 80 : 150;
+       
+       if (now - this.lastShotTime > fireRate) {
          this.lastShotTime = now;
          this.shoot(this.player, BULLET_SPEED, this.player.direction, true);
        }
@@ -239,7 +325,12 @@ export class GameEngine {
     this.player.vy += GRAVITY;
     this.player.y += this.player.vy;
     this.player.x += this.player.vx;
-    if (this.player.y > CANVAS_HEIGHT) this.isGameOver = true;
+    if (this.player.y > CANVAS_HEIGHT) {
+        this.player.isDead = true;
+        this.isGameOver = true;
+        this.stop();
+        audio.explode();
+    }
 
     // Player Platform Collisions
     for (const plat of this.platforms) {
@@ -277,6 +368,17 @@ export class GameEngine {
     this.enemies.forEach(e => {
       if (e.isDead) return;
 
+      if (e.type === 'powerup') {
+          // Check collection
+          if (this.checkCollision(this.player, e)) {
+              e.isDead = true;
+              this.player.weapon = e.subType;
+              audio.powerup();
+              this.score += 500;
+          }
+          return;
+      }
+
       // Boss Logic
       if (e.type === 'boss') {
         // Boss moves up and down or stays put
@@ -286,7 +388,6 @@ export class GameEngine {
         
         // Boss shooting
         if (this.frameCount % (60 - this.levelConfig.id * 5) === 0) {
-            // Aim at player
             const dx = (this.player.x + this.player.w/2) - (e.x + e.w/2);
             const dy = (this.player.y + this.player.h/2) - (e.y + e.h/2);
             const dist = Math.sqrt(dx*dx + dy*dy);
@@ -307,6 +408,11 @@ export class GameEngine {
                 maxHp: 1
             });
         }
+      } else if (e.type === 'sensor') {
+          // Sine wave movement
+          e.x += e.vx;
+          e.y += Math.sin(this.frameCount * 0.1) * 2;
+          if (e.x < this.cameraX - 100) e.isDead = true;
       } else {
         // Normal Enemy Logic
         if (e.x > this.cameraX - 100 && e.x < this.cameraX + CANVAS_WIDTH + 100) {
@@ -345,37 +451,73 @@ export class GameEngine {
       // Hit Entities
       if (b.color === COLOR_BULLET) { // Player Bullet
          this.enemies.forEach(e => {
-            if (!e.isDead && this.checkCollision(b, e)) {
+            if (!e.isDead && e.type !== 'powerup' && this.checkCollision(b, e)) {
                b.isDead = true;
                e.hp--;
                this.spawnParticles(b.x, b.y, '#fff', 3);
+               
+               if (e.type === 'boss') audio.bossHit();
+
                if (e.hp <= 0) {
                    e.isDead = true;
+                   audio.explode();
                    this.score += e.type === 'boss' ? 5000 : 100;
                    this.spawnParticles(e.x + e.w/2, e.y + e.h/2, e.type === 'boss' ? '#ff00ff' : COLOR_ENEMY, 20);
                    
+                   // Drop powerup from sensor or random chance
+                   if (e.type === 'sensor') {
+                       this.spawnPowerUp(e.x, e.y);
+                   } else if (Math.random() < 0.1) {
+                       this.spawnPowerUp(e.x, e.y);
+                   }
+
                    if (e.type === 'boss') {
                        this.isVictory = true; // Boss dead = level complete
+                       this.stop();
+                       audio.powerup(); // Victory fanfare
                    }
                }
             }
          });
       } else { // Enemy Bullet
          if (!this.player.isDead && this.checkCollision(b, this.player)) {
-            b.isDead = true;
-            this.player.isDead = true;
-            this.isGameOver = true;
-            this.spawnParticles(this.player.x, this.player.y, COLOR_PLAYER, 30);
+            if (Date.now() > (this.player.invulnerableUntil || 0)) {
+                b.isDead = true;
+                this.player.hp--;
+                audio.explode();
+                if (this.player.hp <= 0) {
+                    this.player.isDead = true;
+                    this.isGameOver = true;
+                    this.stop();
+                    this.spawnParticles(this.player.x, this.player.y, COLOR_PLAYER, 30);
+                } else {
+                    // Invincibility
+                    this.player.invulnerableUntil = Date.now() + 2000;
+                    this.spawnParticles(this.player.x, this.player.y, COLOR_PLAYER, 10);
+                }
+            }
          }
       }
     });
     
     // Player Body Collisions
     this.enemies.forEach(e => {
-        if (!e.isDead && !this.player.isDead && this.checkCollision(this.player, e)) {
-            this.player.isDead = true;
-            this.isGameOver = true;
-            this.spawnParticles(this.player.x, this.player.y, COLOR_PLAYER, 30);
+        if (!e.isDead && e.type !== 'powerup' && !this.player.isDead && this.checkCollision(this.player, e)) {
+             if (Date.now() > (this.player.invulnerableUntil || 0)) {
+                this.player.hp--;
+                audio.explode();
+                if (this.player.hp <= 0) {
+                    this.player.isDead = true;
+                    this.isGameOver = true;
+                    this.stop();
+                    this.spawnParticles(this.player.x, this.player.y, COLOR_PLAYER, 30);
+                } else {
+                    this.player.invulnerableUntil = Date.now() + 2000;
+                    // Knockback
+                    this.player.vx = -this.player.direction * 10;
+                    this.player.vy = -5;
+                }
+             }
         }
     });
 
@@ -414,18 +556,24 @@ export class GameEngine {
       this.ctx.fillRect(p.x, p.y + 10, p.w, 2);
     });
 
-    // 3. Draw Enemies
+    // 3. Draw Enemies & Powerups
     this.enemies.forEach(e => {
       if (e.type === 'boss') {
           this.drawBoss(e);
+      } else if (e.type === 'powerup') {
+          this.drawPowerUp(e);
+      } else if (e.type === 'sensor') {
+          this.drawSensor(e);
       } else {
           this.drawSoldier(e);
       }
     });
 
-    // 4. Draw Player
+    // 4. Draw Player (with Blink)
     if (!this.player.isDead) {
-      this.drawPlayer();
+      if (!this.player.invulnerableUntil || Date.now() > this.player.invulnerableUntil || Math.floor(Date.now() / 100) % 2 === 0) {
+          this.drawPlayer();
+      }
     }
 
     // 5. Draw Bullets
@@ -449,86 +597,85 @@ export class GameEngine {
     // 7. HUD
     this.drawHUD();
   }
+  
+  drawPowerUp(e: Entity) {
+      this.ctx.fillStyle = '#fff';
+      this.ctx.fillRect(e.x - 2, e.y - 2, e.w + 4, e.h + 4);
+      this.ctx.fillStyle = e.color;
+      this.ctx.fillRect(e.x, e.y, e.w, e.h);
+      // Letter
+      this.ctx.fillStyle = '#fff';
+      this.ctx.font = '16px "Press Start 2P"';
+      this.ctx.fillText(e.subType === 'spread' ? 'S' : 'M', e.x + 6, e.y + 20);
+  }
+  
+  drawSensor(e: Entity) {
+      this.ctx.fillStyle = '#cbd5e1';
+      this.ctx.beginPath();
+      this.ctx.arc(e.x + e.w/2, e.y + e.h/2, e.w/2, 0, Math.PI*2);
+      this.ctx.fill();
+      this.ctx.strokeStyle = '#ef4444';
+      this.ctx.lineWidth = 2;
+      this.ctx.stroke();
+  }
 
   drawPlayer() {
     const p = this.player;
     const isMoving = Math.abs(p.vx) > 0;
     const bob = isMoving ? Math.sin(this.frameCount * 0.5) * 2 : 0;
-    
-    // Direction multiplier
     const dir = p.direction;
 
-    // Legs (Camo Pants)
+    // Legs
     this.ctx.fillStyle = COLOR_PLAYER_PANTS;
-    // Back leg
     this.ctx.fillRect(p.x + (dir === 1 ? 4 : 12), p.y + 24 + bob, 8, 24);
-    // Front leg
     this.ctx.fillRect(p.x + (dir === 1 ? 12 : 4), p.y + 24 - bob, 8, 24);
     
-    // Torso (Skin/Muscle)
+    // Torso
     this.ctx.fillStyle = COLOR_PLAYER; 
     this.ctx.fillRect(p.x + 4, p.y + 12 + bob, 16, 16);
-    // Vest (Green)
     this.ctx.fillStyle = '#166534'; 
     this.ctx.fillRect(p.x + 4, p.y + 12 + bob, 16, 8);
 
     // Head
     this.ctx.fillStyle = COLOR_PLAYER;
     this.ctx.fillRect(p.x + 6, p.y + bob, 12, 12);
-    
-    // Headband
     this.ctx.fillStyle = COLOR_PLAYER_HEADBAND;
     this.ctx.fillRect(p.x + 5, p.y + 2 + bob, 14, 4);
-    // Bandana Tail
     if (isMoving) {
         this.ctx.fillRect(p.x + (dir === 1 ? -4 : 16), p.y + 2 + bob + Math.sin(this.frameCount) * 2, 6, 2);
     }
 
-    // Gun (Rifle)
-    this.ctx.fillStyle = '#1f2937'; // Dark Gray
+    // Gun
+    this.ctx.fillStyle = '#1f2937'; 
     if (this.input.up) {
-       // Aiming Up
        this.ctx.fillRect(p.x + 8, p.y - 4 + bob, 4, 24);
     } else {
-       // Aiming Forward
        this.ctx.fillRect(p.x + (dir === 1 ? 8 : -8), p.y + 16 + bob, 24, 6);
-       // Stock
        this.ctx.fillRect(p.x + (dir === 1 ? 4 : 16), p.y + 16 + bob, 4, 6);
     }
   }
 
   drawSoldier(e: Entity) {
-      // Alien or Soldier based on level
       const isAlien = this.levelConfig.id >= 4;
-      
-      this.ctx.fillStyle = isAlien ? '#be123c' : '#3f6212'; // Red Alien or Green Soldier
+      this.ctx.fillStyle = isAlien ? '#be123c' : '#3f6212';
       this.ctx.fillRect(e.x, e.y, e.w, e.h);
-      
-      // Eye/Visor
       this.ctx.fillStyle = isAlien ? '#fbbf24' : '#000';
       this.ctx.fillRect(e.x + (e.vx < 0 ? 4 : 20), e.y + 8, 8, 4);
-      
-      // Gun
       this.ctx.fillStyle = '#444';
       this.ctx.fillRect(e.x + (e.vx < 0 ? -4 : 24), e.y + 24, 12, 6);
   }
 
   drawBoss(boss: Entity) {
-      // Boss Style depends on level logic generally, but here is a procedural "Mech"
       const shake = boss.hp < boss.maxHp * 0.3 ? Math.random() * 4 - 2 : 0;
       const x = boss.x + shake;
       const y = boss.y + shake;
-      
-      // Main Body
-      this.ctx.fillStyle = this.levelConfig.id === 5 ? '#581c87' : '#374151'; // Purple for Alien boss, Grey for machines
+      this.ctx.fillStyle = this.levelConfig.id === 5 ? '#581c87' : '#374151'; 
       this.ctx.fillRect(x, y, boss.w, boss.h);
       
-      // Core (Weak point)
       const flash = this.frameCount % 10 < 5 ? '#ef4444' : '#7f1d1d';
       this.ctx.fillStyle = flash;
       this.ctx.fillRect(x + boss.w/2 - 10, y + boss.h/2 - 10, 20, 20);
       
-      // Guns/Arms
       this.ctx.fillStyle = '#9ca3af';
       this.ctx.fillRect(x - 10, y + 20, 10, 40);
       this.ctx.fillRect(x + boss.w, y + 20, 10, 40);
@@ -540,23 +687,26 @@ export class GameEngine {
     this.ctx.fillText(`SCORE: ${this.score.toString().padStart(6, '0')}`, 20, 30);
     this.ctx.fillText(`LIVES: ${this.player.hp}`, 20, 55);
     
+    // Draw Weapon Icon
+    let weaponText = 'N';
+    let weaponColor = '#fff';
+    if (this.player.weapon === 'spread') { weaponText = 'S'; weaponColor = COLOR_POWERUP_SPREAD; }
+    if (this.player.weapon === 'machine') { weaponText = 'M'; weaponColor = COLOR_POWERUP_MACHINE; }
+    
+    this.ctx.fillStyle = weaponColor;
+    this.ctx.fillText(`WPN:${weaponText}`, 180, 55);
+    
     // Boss Health Bar
     if (this.boss && !this.boss.isDead) {
         const barW = 300;
         const barH = 20;
         const barX = CANVAS_WIDTH / 2 - barW / 2;
         const barY = CANVAS_HEIGHT - 40;
-        
         this.ctx.fillStyle = 'rgba(0,0,0,0.5)';
         this.ctx.fillRect(barX, barY, barW, barH);
-        
         const hpPercent = Math.max(0, this.boss.hp / this.boss.maxHp);
         this.ctx.fillStyle = '#dc2626';
         this.ctx.fillRect(barX + 2, barY + 2, (barW - 4) * hpPercent, barH - 4);
-        
-        this.ctx.fillStyle = '#fff';
-        this.ctx.font = '10px "Press Start 2P"';
-        this.ctx.fillText("WARNING: BOSS APPROACHING", barX, barY - 10);
     }
   }
 }

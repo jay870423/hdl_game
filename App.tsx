@@ -5,7 +5,8 @@ import { GameState, InputState, MissionData } from './types';
 import { CANVAS_WIDTH, CANVAS_HEIGHT, LEVELS } from './constants';
 import MobileControls from './components/MobileControls';
 import { generateMissionData } from './services/geminiService';
-import { Gamepad2, Skull, Trophy, Play, Loader2, ArrowRight } from 'lucide-react';
+import { audio } from './services/audioService';
+import { Gamepad2, Skull, Trophy, Play, Loader2, ArrowRight, Volume2, VolumeX } from 'lucide-react';
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -13,6 +14,7 @@ export default function App() {
   const [mission, setMission] = useState<MissionData | null>(null);
   const [currentLevel, setCurrentLevel] = useState(1);
   const [finalScore, setFinalScore] = useState(0);
+  const [isMuted, setIsMuted] = useState(false);
   
   const inputState = useRef<InputState>({
     left: false,
@@ -89,6 +91,8 @@ export default function App() {
 
   // --- Game Lifecycle ---
   const startNewGame = async () => {
+    audio.init();
+    audio.resume();
     setCurrentLevel(1);
     await loadLevel(1);
   };
@@ -100,13 +104,14 @@ export default function App() {
   };
 
   const restartLevel = async () => {
+    audio.resume();
     await loadLevel(currentLevel);
   };
 
   const loadLevel = async (level: number) => {
     setGameState(GameState.LOADING);
     
-    // AI Loading for mission brief
+    // AI Loading
     const data = await generateMissionData(level);
     setMission(data);
 
@@ -114,16 +119,22 @@ export default function App() {
       const ctx = canvasRef.current.getContext('2d');
       if (ctx) {
         ctx.imageSmoothingEnabled = false;
-        // Maintain score from previous level if engine exists, else 0
         const prevScore = engineRef.current?.score || 0;
         
+        // Stop previous BGM if any
+        if (engineRef.current) engineRef.current.stop();
+
         engineRef.current = new GameEngine(ctx, inputState.current, level);
-        // If it's not level 1, restore score
         if (level > 1) engineRef.current.score = finalScore; 
         
         setGameState(GameState.PLAYING);
       }
     }
+  };
+  
+  const toggleMute = () => {
+      const muted = audio.toggleMute();
+      setIsMuted(muted);
   };
 
   return (
@@ -141,6 +152,14 @@ export default function App() {
         
         {/* Scanline Effect */}
         <div className="absolute inset-0 pointer-events-none bg-[url('https://raw.githubusercontent.com/zlatkov/scanlines/master/scanlines.png')] opacity-10 mix-blend-overlay"></div>
+        
+        {/* Mute Button */}
+        <button 
+            onClick={toggleMute}
+            className="absolute top-4 right-4 z-50 text-white/50 hover:text-white p-2"
+        >
+            {isMuted ? <VolumeX /> : <Volume2 />}
+        </button>
       </div>
 
       {/* UI Overlays */}

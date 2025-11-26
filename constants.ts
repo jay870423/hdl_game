@@ -17,6 +17,9 @@ export const COLOR_PLAYER_HEADBAND = '#ef4444'; // Red
 export const COLOR_PLAYER_PANTS = '#3b82f6'; // Blue jeans
 export const COLOR_ENEMY = '#ef4444'; // Red
 export const COLOR_BULLET = '#fbbf24'; // Yellow
+export const COLOR_POWERUP_SPREAD = '#ef4444'; // Red S
+export const COLOR_POWERUP_MACHINE = '#3b82f6'; // Blue M
+export const COLOR_SENSOR = '#94a3b8'; // Flying sensor
 
 export const PLAYER_WIDTH = 24;
 export const PLAYER_HEIGHT = 48;
