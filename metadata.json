@@ -1,0 +1,5 @@
+{
+  "name": "hdl_game",
+  "description": "A retro-style run-and-gun action game playable on PC and Mobile. Features GenAI-generated mission briefings and classic platforming gameplay.",
+  "requestFramePermissions": []
+}
