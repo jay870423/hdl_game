@@ -1,3 +1,8 @@
+declare var process: {
+  env: {
+    API_KEY: string;
+  };
+};
 
 import { GoogleGenAI, Type } from "@google/genai";
 import { MissionData } from '../types';

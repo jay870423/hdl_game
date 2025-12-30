@@ -1,8 +1,7 @@
-
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { GameEngine } from './engine/GameEngine';
 import { GameState, InputState, MissionData } from './types';
-import { CANVAS_WIDTH, CANVAS_HEIGHT, LEVELS } from './constants';
+import { CANVAS_WIDTH, CANVAS_HEIGHT } from './constants';
 import MobileControls from './components/MobileControls';
 import { generateMissionData } from './services/geminiService';
 import { audio } from './services/audioService';
@@ -119,7 +118,6 @@ export default function App() {
       const ctx = canvasRef.current.getContext('2d');
       if (ctx) {
         ctx.imageSmoothingEnabled = false;
-        const prevScore = engineRef.current?.score || 0;
         
         // Stop previous BGM if any
         if (engineRef.current) engineRef.current.stop();

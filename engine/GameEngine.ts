@@ -1,12 +1,10 @@
-
 import { 
   Entity, 
   Platform, 
   InputState, 
   Rect, 
   Particle,
-  LevelConfig,
-  WeaponType
+  LevelConfig
 } from '../types';
 import { 
   GRAVITY, 
@@ -204,7 +202,6 @@ export class GameEngine {
     
     if (isPlayer && this.player.weapon === 'spread') {
          // 3-way shot
-         const angles = this.input.up ? [-0.2, 0, 0.2] : [-0.2, 0, 0.2];
          // Adjust logic slightly for up vs forward
          if (this.input.up) {
              // Firing UP
