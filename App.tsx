@@ -165,7 +165,7 @@ export default function App() {
       {gameState === GameState.MENU && (
         <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center text-center p-4 z-20">
             <h1 className="text-4xl md:text-5xl text-transparent bg-clip-text bg-gradient-to-b from-yellow-400 to-orange-600 font-black mb-8 leading-tight drop-shadow-[4px_4px_0_rgba(185,28,28,0.8)]">
-                CONTRA<br/>GEN-AI OPS
+                GEN-FORCE<br/>NEURAL OPS
             </h1>
             <button 
                 onClick={startNewGame}

@@ -1,5 +1,5 @@
 {
-  "name": "hdl_game",
-  "description": "A retro-style run-and-gun action game playable on PC and Mobile. Features GenAI-generated mission briefings and classic platforming gameplay.",
+  "name": "Gen-Force: Neural Ops",
+  "description": "A high-octane retro run-and-gun shooter powered by Google Gemini. Battle through 5 procedurally flavored levels with AI-generated mission briefings.",
   "requestFramePermissions": []
 }
