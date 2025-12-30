@@ -8,7 +8,15 @@ body {
   user-select: none;
   -webkit-user-select: none;
   background-color: #1a1a1a;
+  touch-action: none; /* Prevent browser zooming/scrolling on mobile */
 }
+
+/* Ensure full height on mobile browsers with address bars */
+#root {
+  height: 100dvh; 
+  width: 100%;
+}
+
 /* Hide scrollbars */
 ::-webkit-scrollbar {
   display: none;

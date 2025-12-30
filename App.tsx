@@ -5,7 +5,7 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from './constants';
 import MobileControls from './components/MobileControls';
 import { generateMissionData } from './services/geminiService';
 import { audio } from './services/audioService';
-import { Gamepad2, Skull, Trophy, Play, Loader2, ArrowRight, Volume2, VolumeX } from 'lucide-react';
+import { Gamepad2, Skull, Trophy, Play, Loader2, ArrowRight, Volume2, VolumeX, Smartphone } from 'lucide-react';
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -14,6 +14,7 @@ export default function App() {
   const [currentLevel, setCurrentLevel] = useState(1);
   const [finalScore, setFinalScore] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
+  const [isLandscape, setIsLandscape] = useState(true);
   
   const inputState = useRef<InputState>({
     left: false,
@@ -26,6 +27,20 @@ export default function App() {
 
   const engineRef = useRef<GameEngine | null>(null);
   const requestRef = useRef<number>(0);
+
+  // --- Orientation Check ---
+  useEffect(() => {
+    const checkOrientation = () => {
+      // Simple check: width > height implies landscape-ish
+      // or window.orientation (deprecated) or screen.orientation
+      const isLand = window.innerWidth >= window.innerHeight;
+      setIsLandscape(isLand);
+    };
+    
+    checkOrientation();
+    window.addEventListener('resize', checkOrientation);
+    return () => window.removeEventListener('resize', checkOrientation);
+  }, []);
 
   // --- Input Handling ---
   useEffect(() => {
@@ -135,21 +150,35 @@ export default function App() {
       setIsMuted(muted);
   };
 
+  // If mobile and portrait, show warning
+  if (!isLandscape && window.innerWidth < 768) {
+     return (
+       <div className="w-full h-[100dvh] bg-black flex flex-col items-center justify-center text-white p-8 text-center font-['Press_Start_2P']">
+          <Smartphone className="w-16 h-16 mb-4 animate-pulse text-yellow-400 rotate-90" />
+          <h2 className="text-xl text-yellow-400 mb-4">ROTATE DEVICE</h2>
+          <p className="text-xs leading-loose text-gray-400">
+            Gen-Force Neural Ops requires landscape mode for optimal tactical awareness.
+          </p>
+       </div>
+     );
+  }
+
   return (
-    <div className="w-full h-screen bg-black flex items-center justify-center overflow-hidden relative font-['Press_Start_2P']">
+    <div className="w-full h-[100dvh] bg-black flex items-center justify-center overflow-hidden relative font-['Press_Start_2P']">
       
       {/* Game Canvas Layer */}
-      <div className="relative shadow-2xl border-4 border-gray-800 rounded-lg overflow-hidden w-full max-w-[800px] aspect-video">
+      {/* Optimized for mobile landscape: w-full, h-full, object-contain to fit strictly within 100dvh */}
+      <div className="relative shadow-2xl border-0 md:border-4 border-gray-800 md:rounded-lg overflow-hidden w-full h-full md:h-auto md:w-auto md:max-w-[800px] md:aspect-video flex items-center justify-center bg-[#0f172a]">
         <canvas
           ref={canvasRef}
           width={CANVAS_WIDTH}
           height={CANVAS_HEIGHT}
-          className="w-full h-full object-contain bg-[#0f172a] block"
+          className="w-full h-full object-contain block"
           style={{ imageRendering: 'pixelated' }}
         />
         
-        {/* Scanline Effect */}
-        <div className="absolute inset-0 pointer-events-none bg-[url('https://raw.githubusercontent.com/zlatkov/scanlines/master/scanlines.png')] opacity-10 mix-blend-overlay"></div>
+        {/* Scanline Effect - Hide on mobile for clarity */}
+        <div className="hidden md:block absolute inset-0 pointer-events-none bg-[url('https://raw.githubusercontent.com/zlatkov/scanlines/master/scanlines.png')] opacity-10 mix-blend-overlay"></div>
         
         {/* Mute Button */}
         <button 
@@ -164,7 +193,7 @@ export default function App() {
       
       {gameState === GameState.MENU && (
         <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center text-center p-4 z-20">
-            <h1 className="text-4xl md:text-5xl text-transparent bg-clip-text bg-gradient-to-b from-yellow-400 to-orange-600 font-black mb-8 leading-tight drop-shadow-[4px_4px_0_rgba(185,28,28,0.8)]">
+            <h1 className="text-3xl md:text-5xl text-transparent bg-clip-text bg-gradient-to-b from-yellow-400 to-orange-600 font-black mb-8 leading-tight drop-shadow-[4px_4px_0_rgba(185,28,28,0.8)]">
                 GEN-FORCE<br/>NEURAL OPS
             </h1>
             <button 
@@ -177,7 +206,7 @@ export default function App() {
                 </div>
             </button>
             <p className="mt-8 text-gray-400 text-[10px] md:text-xs font-sans">
-                WASD/ARROWS to Move • J/Z to Fire • K/Space to Jump
+                PC: WASD/Arrows to Move • J/Z to Fire • K/Space to Jump
             </p>
         </div>
       )}
@@ -191,9 +220,9 @@ export default function App() {
 
       {gameState === GameState.PLAYING && mission && (
         <div className="absolute top-2 left-0 right-0 text-center pointer-events-none animate-[fadeOut_5s_forwards] z-10 flex flex-col items-center">
-             <div className="bg-black/70 p-4 border-2 border-green-500 rounded text-center">
-                <h3 className="text-yellow-400 text-lg uppercase mb-2">{mission.title}</h3>
-                <p className="text-white text-[10px] max-w-md font-sans">{mission.briefing}</p>
+             <div className="bg-black/70 p-4 border-2 border-green-500 rounded text-center mx-4">
+                <h3 className="text-yellow-400 text-sm md:text-lg uppercase mb-2">{mission.title}</h3>
+                <p className="text-white text-[10px] max-w-md font-sans hidden md:block">{mission.briefing}</p>
                 <p className="text-red-500 text-[10px] mt-2 font-bold">TARGET: {mission.bossName}</p>
              </div>
         </div>
@@ -240,11 +269,11 @@ export default function App() {
     {gameState === GameState.GAME_COMPLETE && (
         <div className="absolute inset-0 bg-blue-900/95 flex flex-col items-center justify-center text-center text-white z-20 p-8">
             <Gamepad2 className="w-24 h-24 mb-6 text-yellow-400" />
-            <h1 className="text-4xl md:text-5xl font-black mb-4 text-yellow-400">CONGRATULATIONS</h1>
-            <p className="text-lg mb-8 max-w-lg leading-relaxed font-sans">
-                You have defeated the Alien Heart and saved the world. The nightmare is over.
+            <h1 className="text-3xl md:text-5xl font-black mb-4 text-yellow-400">CONGRATULATIONS</h1>
+            <p className="text-sm md:text-lg mb-8 max-w-lg leading-relaxed font-sans">
+                You have defeated the Alien Heart and saved the world.
             </p>
-            <p className="text-2xl mb-8 font-mono border-2 border-yellow-400 px-6 py-3 rounded bg-black/30">
+            <p className="text-xl md:text-2xl mb-8 font-mono border-2 border-yellow-400 px-6 py-3 rounded bg-black/30">
                 FINAL SCORE: {finalScore}
             </p>
             <button 
@@ -258,9 +287,7 @@ export default function App() {
 
       {/* Mobile Controls Layer */}
       {gameState === GameState.PLAYING && (
-        <div className="md:hidden">
-            <MobileControls inputState={inputState} />
-        </div>
+        <MobileControls inputState={inputState} />
       )}
 
       <style>{`
