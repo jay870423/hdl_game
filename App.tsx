@@ -15,6 +15,7 @@ export default function App() {
   const [finalScore, setFinalScore] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [isLandscape, setIsLandscape] = useState(true);
+  const [ignoreOrientation, setIgnoreOrientation] = useState(false);
   
   const inputState = useRef<InputState>({
     left: false,
@@ -152,14 +153,20 @@ export default function App() {
       setIsMuted(muted);
   };
 
-  if (!isLandscape && window.innerWidth < 768) {
+  if (!isLandscape && window.innerWidth < 768 && !ignoreOrientation) {
      return (
        <div className="w-full h-[100dvh] bg-black flex flex-col items-center justify-center text-white p-8 text-center font-['Press_Start_2P']">
           <Smartphone className="w-16 h-16 mb-4 animate-pulse text-yellow-400 rotate-90" />
           <h2 className="text-xl text-yellow-400 mb-4">ROTATE DEVICE</h2>
-          <p className="text-xs leading-loose text-gray-400">
+          <p className="text-xs leading-loose text-gray-400 mb-8">
             Gen-Force Neural Ops requires landscape mode for optimal tactical awareness.
           </p>
+          <button 
+             onClick={() => setIgnoreOrientation(true)}
+             className="px-4 py-2 bg-gray-800 rounded text-[10px] text-gray-400 hover:bg-gray-700 border border-gray-700"
+          >
+             PLAY IN PORTRAIT ANYWAY
+          </button>
        </div>
      );
   }
