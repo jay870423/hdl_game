@@ -31,8 +31,6 @@ export default function App() {
   // --- Orientation Check ---
   useEffect(() => {
     const checkOrientation = () => {
-      // Simple check: width > height implies landscape-ish
-      // or window.orientation (deprecated) or screen.orientation
       const isLand = window.innerWidth >= window.innerHeight;
       setIsLandscape(isLand);
     };
@@ -126,20 +124,18 @@ export default function App() {
     setGameState(GameState.LOADING);
     setMission(null); // Clear previous mission
     
-    // Non-blocking AI call: We don't await this.
-    // We let the game start, and when the text arrives, it pops in.
+    // Non-blocking AI call
     generateMissionData(level).then((data) => {
       setMission(data);
     });
 
-    // Short artificial delay for smooth UI transition (not 3-5s like AI)
+    // Short artificial delay for smooth UI transition
     setTimeout(() => {
       if (canvasRef.current) {
         const ctx = canvasRef.current.getContext('2d');
         if (ctx) {
           ctx.imageSmoothingEnabled = false;
           
-          // Stop previous BGM if any
           if (engineRef.current) engineRef.current.stop();
   
           engineRef.current = new GameEngine(ctx, inputState.current, level);
@@ -156,7 +152,6 @@ export default function App() {
       setIsMuted(muted);
   };
 
-  // If mobile and portrait, show warning
   if (!isLandscape && window.innerWidth < 768) {
      return (
        <div className="w-full h-[100dvh] bg-black flex flex-col items-center justify-center text-white p-8 text-center font-['Press_Start_2P']">
@@ -172,8 +167,6 @@ export default function App() {
   return (
     <div className="w-full h-[100dvh] bg-black flex items-center justify-center overflow-hidden relative font-['Press_Start_2P']">
       
-      {/* Game Canvas Layer */}
-      {/* Optimized for mobile landscape: w-full, h-full, object-contain to fit strictly within 100dvh */}
       <div className="relative shadow-2xl border-0 md:border-4 border-gray-800 md:rounded-lg overflow-hidden w-full h-full md:h-auto md:w-auto md:max-w-[800px] md:aspect-video flex items-center justify-center bg-[#0f172a]">
         <canvas
           ref={canvasRef}
@@ -183,10 +176,8 @@ export default function App() {
           style={{ imageRendering: 'pixelated' }}
         />
         
-        {/* Scanline Effect - Hide on mobile for clarity */}
         <div className="hidden md:block absolute inset-0 pointer-events-none bg-[url('https://raw.githubusercontent.com/zlatkov/scanlines/master/scanlines.png')] opacity-10 mix-blend-overlay"></div>
         
-        {/* Mute Button */}
         <button 
             onClick={toggleMute}
             className="absolute top-4 right-4 z-50 text-white/50 hover:text-white p-2"
@@ -195,8 +186,6 @@ export default function App() {
         </button>
       </div>
 
-      {/* UI Overlays */}
-      
       {gameState === GameState.MENU && (
         <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center text-center p-4 z-20">
             <h1 className="text-3xl md:text-5xl text-transparent bg-clip-text bg-gradient-to-b from-yellow-400 to-orange-600 font-black mb-8 leading-tight drop-shadow-[4px_4px_0_rgba(185,28,28,0.8)]">
@@ -291,7 +280,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Mobile Controls Layer */}
       {gameState === GameState.PLAYING && (
         <MobileControls inputState={inputState} />
       )}
