@@ -124,12 +124,12 @@ export default function App() {
     setGameState(GameState.LOADING);
     setMission(null); // Clear previous mission
     
-    // Non-blocking AI call
+    // Non-blocking AI call: Do NOT await here.
     generateMissionData(level).then((data) => {
       setMission(data);
     });
 
-    // Short artificial delay for smooth UI transition
+    // Short artificial delay for smooth UI transition (800ms)
     setTimeout(() => {
       if (canvasRef.current) {
         const ctx = canvasRef.current.getContext('2d');
