@@ -1,5 +1,5 @@
 {
-  "name": "Gen-Force: Neural Ops",
+  "name": "hdl_game",
   "description": "A high-octane retro run-and-gun shooter powered by Google Gemini. Battle through 5 procedurally flavored levels with AI-generated mission briefings.",
   "requestFramePermissions": []
 }
