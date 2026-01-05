@@ -108,41 +108,47 @@ export default function App() {
     audio.init();
     audio.resume();
     setCurrentLevel(1);
-    await loadLevel(1);
+    loadLevel(1);
   };
 
   const nextLevel = async () => {
     const next = currentLevel + 1;
     setCurrentLevel(next);
-    await loadLevel(next);
+    loadLevel(next);
   };
 
   const restartLevel = async () => {
     audio.resume();
-    await loadLevel(currentLevel);
+    loadLevel(currentLevel);
   };
 
-  const loadLevel = async (level: number) => {
+  const loadLevel = (level: number) => {
     setGameState(GameState.LOADING);
+    setMission(null); // Clear previous mission
     
-    // AI Loading
-    const data = await generateMissionData(level);
-    setMission(data);
+    // Non-blocking AI call: We don't await this.
+    // We let the game start, and when the text arrives, it pops in.
+    generateMissionData(level).then((data) => {
+      setMission(data);
+    });
 
-    if (canvasRef.current) {
-      const ctx = canvasRef.current.getContext('2d');
-      if (ctx) {
-        ctx.imageSmoothingEnabled = false;
-        
-        // Stop previous BGM if any
-        if (engineRef.current) engineRef.current.stop();
-
-        engineRef.current = new GameEngine(ctx, inputState.current, level);
-        if (level > 1) engineRef.current.score = finalScore; 
-        
-        setGameState(GameState.PLAYING);
+    // Short artificial delay for smooth UI transition (not 3-5s like AI)
+    setTimeout(() => {
+      if (canvasRef.current) {
+        const ctx = canvasRef.current.getContext('2d');
+        if (ctx) {
+          ctx.imageSmoothingEnabled = false;
+          
+          // Stop previous BGM if any
+          if (engineRef.current) engineRef.current.stop();
+  
+          engineRef.current = new GameEngine(ctx, inputState.current, level);
+          if (level > 1) engineRef.current.score = finalScore; 
+          
+          setGameState(GameState.PLAYING);
+        }
       }
-    }
+    }, 800);
   };
   
   const toggleMute = () => {
@@ -220,7 +226,7 @@ export default function App() {
 
       {gameState === GameState.PLAYING && mission && (
         <div className="absolute top-2 left-0 right-0 text-center pointer-events-none animate-[fadeOut_5s_forwards] z-10 flex flex-col items-center">
-             <div className="bg-black/70 p-4 border-2 border-green-500 rounded text-center mx-4">
+             <div className="bg-black/70 p-4 border-2 border-green-500 rounded text-center mx-4 backdrop-blur-sm">
                 <h3 className="text-yellow-400 text-sm md:text-lg uppercase mb-2">{mission.title}</h3>
                 <p className="text-white text-[10px] max-w-md font-sans hidden md:block">{mission.briefing}</p>
                 <p className="text-red-500 text-[10px] mt-2 font-bold">TARGET: {mission.bossName}</p>
