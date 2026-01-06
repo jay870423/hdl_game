@@ -2,10 +2,10 @@
 import { LevelConfig } from "./types";
 
 export const GRAVITY = 0.6;
-export const PLAYER_SPEED = 4;
-export const JUMP_FORCE = -12;
+export const PLAYER_SPEED = 4.5; // Slightly faster for better control
+export const JUMP_FORCE = -13; // Higher jump
 export const TERMINAL_VELOCITY = 15;
-export const BULLET_SPEED = 10;
+export const BULLET_SPEED = 12;
 export const ENEMY_SPEED = 2;
 
 export const CANVAS_WIDTH = 800;
@@ -29,10 +29,10 @@ export const LEVELS: LevelConfig[] = [
     id: 1,
     name: "JUNGLE RAID",
     theme: {
-      bgTop: '#1e293b', // Dark Slate
-      bgBottom: '#064e3b', // Dark Green
-      platformTop: '#22c55e', // Green Grass
-      platformBody: '#78350f', // Dirt Brown
+      bgTop: '#1e293b', 
+      bgBottom: '#064e3b', 
+      platformTop: '#22c55e', 
+      platformBody: '#78350f', 
     },
     length: 4000,
     bossHp: 20
@@ -41,10 +41,10 @@ export const LEVELS: LevelConfig[] = [
     id: 2,
     name: "ENEMY BASE",
     theme: {
-      bgTop: '#0f172a', // Dark Blue
-      bgBottom: '#334155', // Slate
-      platformTop: '#94a3b8', // Steel
-      platformBody: '#475569', // Dark Steel
+      bgTop: '#0f172a', 
+      bgBottom: '#334155', 
+      platformTop: '#94a3b8', 
+      platformBody: '#475569', 
     },
     length: 4500,
     bossHp: 30
@@ -53,10 +53,10 @@ export const LEVELS: LevelConfig[] = [
     id: 3,
     name: "WATERFALL",
     theme: {
-      bgTop: '#0c4a6e', // Deep Sky
-      bgBottom: '#0ea5e9', // Sky Blue
-      platformTop: '#67e8f9', // Cyan
-      platformBody: '#1e3a8a', // Dark Blue Rock
+      bgTop: '#0c4a6e', 
+      bgBottom: '#0ea5e9', 
+      platformTop: '#67e8f9', 
+      platformBody: '#1e3a8a', 
     },
     length: 5000,
     bossHp: 40
@@ -65,10 +65,10 @@ export const LEVELS: LevelConfig[] = [
     id: 4,
     name: "SNOW FIELD",
     theme: {
-      bgTop: '#e2e8f0', // Light Grey
-      bgBottom: '#ffffff', // White
-      platformTop: '#ffffff', // Snow
-      platformBody: '#cbd5e1', // Ice Rock
+      bgTop: '#e2e8f0', 
+      bgBottom: '#ffffff', 
+      platformTop: '#ffffff', 
+      platformBody: '#cbd5e1', 
     },
     length: 5500,
     bossHp: 50
@@ -77,12 +77,48 @@ export const LEVELS: LevelConfig[] = [
     id: 5,
     name: "ALIEN LAIR",
     theme: {
-      bgTop: '#450a0a', // Dark Red
-      bgBottom: '#7f1d1d', // Red
-      platformTop: '#f87171', // Flesh
-      platformBody: '#581c87', // Purple
+      bgTop: '#450a0a', 
+      bgBottom: '#7f1d1d', 
+      platformTop: '#f87171', 
+      platformBody: '#581c87', 
     },
     length: 6000,
-    bossHp: 80
+    bossHp: 70
+  },
+  {
+    id: 6,
+    name: "VOLCANIC CORE",
+    theme: {
+      bgTop: '#2b0606',
+      bgBottom: '#7f1d1d',
+      platformTop: '#7c2d12', // Dark orange/brown
+      platformBody: '#450a0a',
+    },
+    length: 6500,
+    bossHp: 90
+  },
+  {
+    id: 7,
+    name: "SKY FORTRESS",
+    theme: {
+      bgTop: '#0f172a',
+      bgBottom: '#60a5fa',
+      platformTop: '#e2e8f0', // Steel
+      platformBody: '#1e293b', // Dark Steel
+    },
+    length: 7000,
+    bossHp: 110
+  },
+  {
+    id: 8,
+    name: "NEURAL VOID",
+    theme: {
+      bgTop: '#000000',
+      bgBottom: '#2e1065', // Deep Purple
+      platformTop: '#d8b4fe', // Neon Purple
+      platformBody: '#000000',
+    },
+    length: 8000,
+    bossHp: 150
   }
 ];

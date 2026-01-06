@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
-import { Crosshair, ArrowUpCircle } from 'lucide-react';
+import { Crosshair, ArrowUp } from 'lucide-react';
 import { InputState } from '../types';
+import { audio } from '../services/audioService';
 
 interface MobileControlsProps {
   inputState: React.MutableRefObject<InputState>;
@@ -9,6 +10,11 @@ interface MobileControlsProps {
 const MobileControls: React.FC<MobileControlsProps> = ({ inputState }) => {
   const dPadRef = useRef<HTMLDivElement>(null);
   const [activeDirection, setActiveDirection] = useState<{ x: number, y: number } | null>(null);
+
+  const activateAudio = () => {
+    // Ensure audio context is running on first touch interaction
+    audio.resume();
+  };
 
   // --- D-Pad Logic ---
   
@@ -21,35 +27,34 @@ const MobileControls: React.FC<MobileControlsProps> = ({ inputState }) => {
     const dx = clientX - centerX;
     const dy = clientY - centerY;
     
-    // Determine input based on vector
-    // Threshold for activation
+    // Increased threshold for better center deadzone
     const threshold = 10; 
     
     const newInputs = {
       left: dx < -threshold,
       right: dx > threshold,
-      up: dy < -threshold, // Screen coordinates: up is negative Y
+      up: dy < -threshold, 
       down: dy > threshold
     };
 
-    // Update global state
     inputState.current.left = newInputs.left;
     inputState.current.right = newInputs.right;
     inputState.current.up = newInputs.up;
     inputState.current.down = newInputs.down;
 
-    // Visual feedback
     let x = 0; 
     if (newInputs.left) x = -1;
     if (newInputs.right) x = 1;
     let y = 0;
     if (newInputs.up) y = -1;
     if (newInputs.down) y = 1;
-    setActiveDirection({ x, y });
+    
+    setActiveDirection(x === 0 && y === 0 ? null : { x, y });
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
     e.preventDefault(); 
+    activateAudio();
     handleMove(e.touches[0].clientX, e.touches[0].clientY);
   };
 
@@ -60,7 +65,6 @@ const MobileControls: React.FC<MobileControlsProps> = ({ inputState }) => {
 
   const handleTouchEnd = (e: React.TouchEvent) => {
     e.preventDefault();
-    // Reset inputs
     inputState.current.left = false;
     inputState.current.right = false;
     inputState.current.up = false;
@@ -68,12 +72,12 @@ const MobileControls: React.FC<MobileControlsProps> = ({ inputState }) => {
     setActiveDirection(null);
   };
 
-  // --- Button Logic ---
-
   const handleBtnStart = (key: 'jump' | 'fire', e: React.TouchEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    activateAudio();
     inputState.current[key] = true;
+    if (navigator.vibrate) navigator.vibrate(10);
   };
 
   const handleBtnEnd = (key: 'jump' | 'fire', e: React.TouchEvent) => {
@@ -83,56 +87,72 @@ const MobileControls: React.FC<MobileControlsProps> = ({ inputState }) => {
   };
 
   return (
-    <div className="fixed inset-0 pointer-events-none z-50 flex items-end justify-between px-6 pb-8 lg:hidden">
+    <div className="fixed inset-0 pointer-events-none z-50 flex items-end justify-between px-6 pb-8 lg:hidden select-none">
       
-      {/* Virtual D-Pad Zone */}
+      {/* High Contrast Virtual Joystick - Improved Visibility */}
       <div 
         ref={dPadRef}
-        className="pointer-events-auto w-40 h-40 relative flex items-center justify-center bg-white/5 rounded-full backdrop-blur-[2px] border-2 border-white/10 touch-none"
+        className="pointer-events-auto w-48 h-48 relative flex items-center justify-center rounded-full touch-none"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        {/* Visual Center */}
-        <div className="absolute w-12 h-12 bg-white/20 rounded-full" />
+        {/* Dark Background Base for Contrast on White/Snow Levels */}
+        <div className="absolute inset-2 bg-black/80 border-[6px] border-white/60 rounded-full backdrop-blur-md shadow-2xl"></div>
         
-        {/* Visual Direction Indicator */}
-        {activeDirection && (
-          <div 
-            className="absolute w-10 h-10 bg-white/50 rounded-full transition-transform duration-75"
-            style={{ 
-              transform: `translate(${activeDirection.x * 40}px, ${activeDirection.y * 40}px)`
-            }}
-          />
-        )}
+        {/* Directional Guides */}
+        <div className="absolute w-full h-1 bg-white/20" />
+        <div className="absolute h-full w-1 bg-white/20" />
         
-        {/* Decorators */}
-        <div className="absolute top-2 text-white/30 text-[10px]">UP</div>
-        <div className="absolute bottom-2 text-white/30 text-[10px]">DOWN</div>
-        <div className="absolute left-2 text-white/30 text-[10px]">LEFT</div>
-        <div className="absolute right-2 text-white/30 text-[10px]">RIGHT</div>
+        {/* Decorative Arrows */}
+        <div className="absolute top-4 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-b-[12px] border-b-white/50"></div>
+        <div className="absolute bottom-4 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[12px] border-t-white/50"></div>
+        <div className="absolute left-4 w-0 h-0 border-t-[8px] border-t-transparent border-b-[8px] border-b-transparent border-r-[12px] border-r-white/50"></div>
+        <div className="absolute right-4 w-0 h-0 border-t-[8px] border-t-transparent border-b-[8px] border-b-transparent border-l-[12px] border-l-white/50"></div>
+
+        {/* Stick / Active Indicator */}
+        <div 
+          className={`absolute w-16 h-16 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full shadow-lg border-4 border-white transition-transform duration-75 ease-out ${activeDirection ? 'scale-110 shadow-orange-500/50' : 'scale-100'}`}
+          style={{ 
+            transform: activeDirection 
+              ? `translate(${activeDirection.x * 55}px, ${activeDirection.y * 55}px)`
+              : 'translate(0, 0)',
+            opacity: 1
+          }}
+        >
+            <div className="w-full h-full flex items-center justify-center">
+               <div className="w-6 h-6 bg-white/40 rounded-full blur-[1px]" />
+            </div>
+        </div>
       </div>
 
-      {/* Action Buttons */}
-      <div className="pointer-events-auto flex gap-6 items-end">
+      {/* Action Buttons - Larger & High Contrast with Backgrounds */}
+      <div className="pointer-events-auto flex gap-8 items-end pb-2 pr-4">
         {/* Fire Button (B) */}
         <button
-          className="group w-20 h-20 bg-red-600/60 active:bg-red-500 rounded-full flex flex-col items-center justify-center border-4 border-red-400 backdrop-blur-sm shadow-lg active:scale-95 transition-transform touch-none"
+          className="group relative w-24 h-24 rounded-full flex flex-col items-center justify-center touch-none active:scale-95 transition-transform"
           onTouchStart={(e) => handleBtnStart('fire', e)}
           onTouchEnd={(e) => handleBtnEnd('fire', e)}
         >
-          <Crosshair className="text-white w-8 h-8 opacity-80 group-active:opacity-100" />
-          <span className="text-[10px] text-white font-bold mt-1 opacity-80">FIRE</span>
+          {/* Dark backing for visibility */}
+          <div className="absolute -inset-2 bg-black/60 rounded-full -z-10 blur-sm"></div>
+          
+          <div className="absolute inset-0 bg-red-600 rounded-full shadow-[0_6px_0_rgb(153,27,27)] group-active:translate-y-2 group-active:shadow-none transition-all border-[3px] border-white/80"></div>
+          <Crosshair className="relative text-white w-10 h-10 drop-shadow-md" />
+          <span className="relative text-[10px] text-white font-black mt-1 tracking-widest drop-shadow-lg">FIRE</span>
         </button>
 
         {/* Jump Button (A) */}
         <button
-          className="group w-20 h-20 bg-blue-600/60 active:bg-blue-500 rounded-full flex flex-col items-center justify-center border-4 border-blue-400 backdrop-blur-sm shadow-lg active:scale-95 transition-transform touch-none"
+          className="group relative w-24 h-24 rounded-full flex flex-col items-center justify-center touch-none active:scale-95 transition-transform mb-12"
           onTouchStart={(e) => handleBtnStart('jump', e)}
           onTouchEnd={(e) => handleBtnEnd('jump', e)}
         >
-          <ArrowUpCircle className="text-white w-8 h-8 opacity-80 group-active:opacity-100" />
-          <span className="text-[10px] text-white font-bold mt-1 opacity-80">JUMP</span>
+          <div className="absolute -inset-2 bg-black/60 rounded-full -z-10 blur-sm"></div>
+          
+          <div className="absolute inset-0 bg-blue-600 rounded-full shadow-[0_6px_0_rgb(30,64,175)] group-active:translate-y-2 group-active:shadow-none transition-all border-[3px] border-white/80"></div>
+          <ArrowUp className="relative text-white w-10 h-10 drop-shadow-md" />
+          <span className="relative text-[10px] text-white font-black mt-1 tracking-widest drop-shadow-lg">JUMP</span>
         </button>
       </div>
     </div>

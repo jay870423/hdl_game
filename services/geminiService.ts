@@ -1,3 +1,4 @@
+
 declare var process: {
   env: {
     API_KEY: string;
@@ -16,12 +17,11 @@ export const generateMissionData = async (level: number): Promise<MissionData> =
   try {
     const ai = new GoogleGenAI({ apiKey });
     
-    // We request a structured JSON response for the mission briefing
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: `Generate a cool, 80s action movie style mission briefing for Level ${level} of a Contra-like run and gun game. 
-      Level 1: Jungle. Level 2: Base. Level 3: Waterfall. Level 4: Snow. Level 5: Alien Lair.
-      Keep it short and punchy.`,
+      Levels: 1=Jungle, 2=Base, 3=Waterfall, 4=Snow, 5=Alien Lair, 6=Volcano, 7=Sky Fortress, 8=Neural Void (Final Dimension).
+      Keep it short and punchy. Make Level 8 sound impossible.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -29,11 +29,11 @@ export const generateMissionData = async (level: number): Promise<MissionData> =
           properties: {
             title: {
               type: Type.STRING,
-              description: "The name of the mission (e.g. Operation Thunder)",
+              description: "The name of the mission.",
             },
             briefing: {
               type: Type.STRING,
-              description: "Two sentences describing the threat and the objective.",
+              description: "Two sentences describing the threat.",
             },
             bossName: {
               type: Type.STRING,
@@ -64,6 +64,9 @@ const getFallbackMission = (level: number): MissionData => {
     { title: "Waterfall Climb", briefing: "Scale the falls. The enemy is heavily dug in.", bossName: "Heavy Chopper" },
     { title: "Frozen Tundra", briefing: "Survive the cold. Locate the secret lab entrance.", bossName: "Ice Mecha" },
     { title: "Alien Hive", briefing: "Destroy the Queen. Save the world.", bossName: "Emperor Heart" },
+    { title: "Magma Core", briefing: "The base is self-destructing. Escape the volcano.", bossName: "Magma Golem" },
+    { title: "Sky Fortress", briefing: "Board the airship. Don't look down.", bossName: "Sky Captain" },
+    { title: "Neural Void", briefing: "Enter the digital chaos. End this nightmare.", bossName: "Omega Brain" },
   ];
   return missions[level - 1] || missions[0];
 };

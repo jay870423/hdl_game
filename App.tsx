@@ -75,23 +75,33 @@ export default function App() {
 
   // --- Game Loop ---
   const loop = () => {
-    if (engineRef.current && gameState === GameState.PLAYING) {
-      engineRef.current.update();
-      engineRef.current.draw();
+    // Safety check: if game is meant to be playing but engine is missing, stop.
+    if (!engineRef.current && gameState === GameState.PLAYING) return;
 
-      if (engineRef.current.isGameOver) {
-        setFinalScore(engineRef.current.score);
-        setGameState(GameState.GAME_OVER);
-      } else if (engineRef.current.isVictory) {
-        setFinalScore(engineRef.current.score + (currentLevel * 1000)); 
-        
-        if (currentLevel >= 5) {
-             setGameState(GameState.GAME_COMPLETE);
-        } else {
-             setGameState(GameState.VICTORY);
+    try {
+      if (engineRef.current && gameState === GameState.PLAYING) {
+        engineRef.current.update();
+        engineRef.current.draw();
+
+        if (engineRef.current.isGameOver) {
+          setFinalScore(engineRef.current.score);
+          setGameState(GameState.GAME_OVER);
+        } else if (engineRef.current.isVictory) {
+          setFinalScore(engineRef.current.score + (currentLevel * 1000)); 
+          
+          if (currentLevel >= 8) { // Updated to 8 levels
+               setGameState(GameState.GAME_COMPLETE);
+          } else {
+               setGameState(GameState.VICTORY);
+          }
         }
       }
+    } catch (error) {
+      console.error("Game loop crashed:", error);
+      // Fallback to avoid stuck screen
+      setGameState(GameState.GAME_OVER);
     }
+    
     requestRef.current = requestAnimationFrame(loop);
   };
 
