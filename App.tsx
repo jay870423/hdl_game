@@ -1,3 +1,4 @@
+
 import { useEffect, useRef, useState } from 'react';
 import { GameEngine } from './engine/GameEngine';
 import { GameState, InputState, MissionData } from './types';
@@ -24,6 +25,7 @@ export default function App() {
     down: false,
     jump: false,
     fire: false,
+    bomb: false
   });
 
   const engineRef = useRef<GameEngine | null>(null);
@@ -51,6 +53,7 @@ export default function App() {
         case 'KeyS': case 'ArrowDown': inputState.current.down = true; break;
         case 'Space': case 'KeyK': inputState.current.jump = true; break;
         case 'KeyJ': case 'Enter': inputState.current.fire = true; break;
+        case 'KeyL': case 'ShiftLeft': case 'ShiftRight': inputState.current.bomb = true; break;
       }
     };
 
@@ -62,6 +65,7 @@ export default function App() {
         case 'KeyS': case 'ArrowDown': inputState.current.down = false; break;
         case 'Space': case 'KeyK': inputState.current.jump = false; break;
         case 'KeyJ': case 'Enter': inputState.current.fire = false; break;
+        case 'KeyL': case 'ShiftLeft': case 'ShiftRight': inputState.current.bomb = false; break;
       }
     };
 
@@ -150,7 +154,11 @@ export default function App() {
           if (engineRef.current) engineRef.current.stop();
   
           engineRef.current = new GameEngine(ctx, inputState.current, level);
-          if (level > 1) engineRef.current.score = finalScore; 
+          if (level > 1) {
+             engineRef.current.score = finalScore;
+             // Give player bombs if they are low
+             engineRef.current.player.bombs = Math.max(3, engineRef.current.player.bombs || 3);
+          }
           
           setGameState(GameState.PLAYING);
         }
@@ -218,7 +226,7 @@ export default function App() {
                 </div>
             </button>
             <p className="mt-8 text-gray-400 text-[10px] md:text-xs font-sans">
-                PC: WASD/Arrows to Move • J/Z to Fire • K/Space to Jump
+                PC: WASD to Move • J to Fire • K to Jump • L to Bomb
             </p>
         </div>
       )}

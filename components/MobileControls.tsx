@@ -1,5 +1,6 @@
+
 import React, { useRef, useState } from 'react';
-import { Crosshair, ArrowUp } from 'lucide-react';
+import { Crosshair, ArrowUp, Bomb } from 'lucide-react';
 import { InputState } from '../types';
 import { audio } from '../services/audioService';
 
@@ -72,7 +73,7 @@ const MobileControls: React.FC<MobileControlsProps> = ({ inputState }) => {
     setActiveDirection(null);
   };
 
-  const handleBtnStart = (key: 'jump' | 'fire', e: React.TouchEvent) => {
+  const handleBtnStart = (key: 'jump' | 'fire' | 'bomb', e: React.TouchEvent) => {
     e.preventDefault();
     e.stopPropagation();
     activateAudio();
@@ -80,7 +81,7 @@ const MobileControls: React.FC<MobileControlsProps> = ({ inputState }) => {
     if (navigator.vibrate) navigator.vibrate(10);
   };
 
-  const handleBtnEnd = (key: 'jump' | 'fire', e: React.TouchEvent) => {
+  const handleBtnEnd = (key: 'jump' | 'fire' | 'bomb', e: React.TouchEvent) => {
     e.preventDefault();
     e.stopPropagation();
     inputState.current[key] = false;
@@ -127,7 +128,20 @@ const MobileControls: React.FC<MobileControlsProps> = ({ inputState }) => {
       </div>
 
       {/* Action Buttons - Larger & High Contrast with Backgrounds */}
-      <div className="pointer-events-auto flex gap-8 items-end pb-2 pr-4">
+      <div className="pointer-events-auto flex gap-6 items-end pb-2 pr-4">
+        {/* Bomb Button (Skill) */}
+        <button
+          className="group relative w-16 h-16 rounded-full flex flex-col items-center justify-center touch-none active:scale-95 transition-transform mb-24"
+          onTouchStart={(e) => handleBtnStart('bomb', e)}
+          onTouchEnd={(e) => handleBtnEnd('bomb', e)}
+        >
+          <div className="absolute -inset-2 bg-black/60 rounded-full -z-10 blur-sm"></div>
+          
+          <div className="absolute inset-0 bg-gray-600 rounded-full shadow-[0_6px_0_rgb(55,65,81)] group-active:translate-y-2 group-active:shadow-none transition-all border-[3px] border-white/80"></div>
+          <Bomb className="relative text-white w-8 h-8 drop-shadow-md" />
+          <span className="relative text-[8px] text-white font-black mt-1 tracking-widest drop-shadow-lg">BOMB</span>
+        </button>
+
         {/* Fire Button (B) */}
         <button
           className="group relative w-24 h-24 rounded-full flex flex-col items-center justify-center touch-none active:scale-95 transition-transform"

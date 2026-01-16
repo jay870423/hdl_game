@@ -15,8 +15,9 @@ export interface Rect {
   h: number;
 }
 
-export type EntityType = 'player' | 'enemy' | 'boss' | 'bullet' | 'particle' | 'powerup' | 'sensor';
-export type WeaponType = 'normal' | 'spread' | 'machine';
+export type EntityType = 'player' | 'enemy' | 'boss' | 'bullet' | 'particle' | 'powerup' | 'sensor' | 'bomb' | 'explosion' | 'beam';
+export type WeaponType = 'normal' | 'spread' | 'machine' | 'laser';
+export type PowerUpType = 'spread' | 'machine' | 'laser' | 'health' | 'bomb_refill';
 
 export interface Entity extends Rect {
   id: string;
@@ -33,9 +34,23 @@ export interface Entity extends Rect {
   // Player specific
   weapon?: WeaponType;
   invulnerableUntil?: number;
+  bombs?: number; // Amount of bombs
 
   // Powerup specific
-  subType?: WeaponType; 
+  subType?: PowerUpType; 
+  baseY?: number; // For floating animation
+  
+  // Projectile specific
+  penetratesWalls?: boolean; // Can it go through platforms?
+  penetratesEnemies?: boolean; // Can it go through multiple enemies?
+  hitEnemyIds?: string[]; // Track which enemies have been hit by this penetrating bullet
+  
+  // Bomb/Explosion specific
+  radius?: number;
+
+  // Boss specific
+  attackState?: 'idle' | 'charging_beam' | 'firing_beam';
+  attackTimer?: number;
 }
 
 export interface Platform extends Rect {
@@ -47,6 +62,7 @@ export interface Particle extends Rect {
   vy: number;
   life: number;
   color: string;
+  text?: string; // For floating text
 }
 
 export interface MissionData {
@@ -62,6 +78,7 @@ export interface InputState {
   down: boolean; // Crouch
   jump: boolean;
   fire: boolean;
+  bomb: boolean; // New skill input
 }
 
 export interface LevelConfig {
