@@ -986,7 +986,6 @@ export class GameEngine {
           // Draw Hyper Beam
           this.ctx.save();
           // Warning flicker or Full Beam
-          const flicker = Math.random() > 0.5;
           
           if (b.hp > 0) {
                // Core Beam
@@ -1233,7 +1232,7 @@ export class GameEngine {
       
       // Colors
       const furColor = COLOR_CAPYBARA_FUR; // #8B4513
-      const noseColor = '#1a1a1a'; // Dark Nose
+      const noseColor = COLOR_CAPYBARA_NOSE; // Dark Nose
       const legColor = '#5D4037'; // Darker limbs
       
       // 1. Draw Legs (Background/Far side)
