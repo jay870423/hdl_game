@@ -19,6 +19,11 @@ export type EntityType = 'player' | 'enemy' | 'boss' | 'bullet' | 'particle' | '
 export type WeaponType = 'normal' | 'spread' | 'machine' | 'laser';
 export type PowerUpType = 'spread' | 'machine' | 'laser' | 'health' | 'bomb_refill';
 
+export interface Point {
+  x: number;
+  y: number;
+}
+
 export interface Entity extends Rect {
   id: string;
   type: EntityType;
@@ -51,6 +56,11 @@ export interface Entity extends Rect {
   // Boss specific
   attackState?: 'idle' | 'charging_beam' | 'firing_beam';
   attackTimer?: number;
+  // Advanced Animation Props
+  tentacles?: Point[][]; // Array of joint chains
+  animScaleX?: number;   // Breathing animation width
+  animScaleY?: number;   // Breathing animation height
+  targetY?: number;      // For smooth movement
 }
 
 export interface Platform extends Rect {
