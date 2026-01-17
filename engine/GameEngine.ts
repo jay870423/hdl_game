@@ -1,3 +1,4 @@
+
 import { 
   Entity, 
   Platform, 
@@ -26,8 +27,6 @@ import {
   COLOR_BULLET,
   COLOR_BULLET_ENEMY,
   COLOR_CAPYBARA_FUR,
-  COLOR_CAPYBARA_NOSE,
-  COLOR_CAPYBARA_EAR,
   COLOR_ENEMY_VEST,
   COLOR_ENEMY_VISOR,
   COLOR_BOSS_ARMOR,
@@ -921,232 +920,220 @@ export class GameEngine {
   }
 
   updateBoss(boss: Entity) {
-      boss.frameTimer = (boss.frameTimer || 0) + 1;
-      const t = boss.frameTimer;
-      boss.y = (boss.targetY || boss.y) + Math.sin(t * 0.05) * 20;
+      if (boss.isDead) return;
+      
+      const t = this.frameCount;
 
-      boss.animScaleX = 1 + Math.sin(t * 0.1) * 0.05;
-      boss.animScaleY = 1 + Math.cos(t * 0.1) * 0.05;
+      // 1. Movement & Hovering
+      // Boss attempts to stay on screen right
+      const targetX = this.cameraX + CANVAS_WIDTH - 200 - (boss.w / 2);
+      const targetY = (boss.targetY || 100) + Math.sin(t * 0.04) * 50;
 
+      boss.x += (targetX - boss.x) * 0.02;
+      boss.y += (targetY - boss.y) * 0.05;
+
+      // 2. Tentacles / Appendages IK
       if (boss.tentacles) {
+          const cx = boss.x + boss.w / 2;
+          const cy = boss.y + boss.h / 2;
+          
           boss.tentacles.forEach((tentacle, i) => {
-              const headX = boss.x + boss.w/2 + Math.cos(t * 0.05 + i) * 40;
-              const headY = boss.y + boss.h/2 + Math.sin(t * 0.05 + i) * 40;
-              
-              tentacle[0].x = headX;
-              tentacle[0].y = headY;
-              
-              for (let j = 1; j < tentacle.length; j++) {
-                  const prev = tentacle[j-1];
-                  const curr = tentacle[j];
-                  const dx = prev.x - curr.x;
-                  const dy = prev.y - curr.y;
-                  const dist = Math.sqrt(dx*dx + dy*dy);
-                  const segLen = 20;
-                  
-                  if (dist > 0) {
-                      const angle = Math.atan2(dy, dx);
-                      const targetX = prev.x - Math.cos(angle) * segLen;
-                      const targetY = prev.y - Math.sin(angle) * segLen;
-                      curr.x += (targetX - curr.x) * 0.1;
-                      curr.y += (targetY - curr.y) * 0.1;
-                      curr.x += Math.sin(t * 0.1 + j + i) * 2;
-                  }
-              }
+               // Anchor point on body (rotating)
+               const offsetAngle = (i / boss.tentacles!.length) * Math.PI * 2 + (t * 0.02);
+               const anchorX = cx + Math.cos(offsetAngle) * 40;
+               const anchorY = cy + Math.sin(offsetAngle) * 40;
+               
+               // First segment attached to anchor
+               tentacle[0].x = anchorX;
+               tentacle[0].y = anchorY;
+
+               // Follow logic for subsequent segments
+               for (let j = 1; j < tentacle.length; j++) {
+                   const lead = tentacle[j - 1];
+                   const follow = tentacle[j];
+                   
+                   const dx = lead.x - follow.x;
+                   const dy = lead.y - follow.y;
+                   const angle = Math.atan2(dy, dx);
+                   const segLen = 20;
+
+                   follow.x = lead.x - Math.cos(angle) * segLen;
+                   follow.y = lead.y - Math.sin(angle) * segLen;
+                   
+                   // Add some organic waviness
+                   follow.x += Math.sin(t * 0.1 + j) * 2; 
+               }
           });
       }
 
+      // 3. Attack State Machine
       if (boss.attackTimer && boss.attackTimer > 0) {
           boss.attackTimer--;
       } else {
+          // Transition Logic
           if (boss.attackState === 'idle') {
-             if (Math.random() > 0.7) {
-                 boss.attackState = 'charging_beam';
-                 boss.attackTimer = 60;
-                 audio.playTone(100, 'sawtooth', 0.5);
-             } else {
-                 boss.attackTimer = 100;
-                 for(let i=-2; i<=2; i++) {
-                     this.shoot(boss, 6, -1, false);
-                 }
-             }
+              // 30% chance to beam, 70% chance to shoot projectiles
+              if (Math.random() < 0.3) {
+                  boss.attackState = 'charging_beam';
+                  boss.attackTimer = 60; // 1 second charge
+                  boss.animScaleX = 0.9;
+                  boss.animScaleY = 1.1; // Squeeze
+                  audio.playTone(150, 'sawtooth', 0.5); // Charge sound
+              } else {
+                  // Projectile Burst
+                  // We'll just fire one burst per state change for simplicity, or use a burst counter
+                  for(let k = 0; k < 5; k++) {
+                      const angle = Math.PI * 0.7 + (k / 4) * Math.PI * 0.6; // Fan out towards left
+                      const speed = 5;
+                      this.bullets.push(this.createBullet(
+                          boss.x + boss.w/2, 
+                          boss.y + boss.h/2, 
+                          Math.cos(angle) * speed, 
+                          Math.sin(angle) * speed, 
+                          false, 
+                          false
+                      ));
+                  }
+                  boss.attackTimer = 90; // Cooldown
+                  audio.shoot();
+              }
           } else if (boss.attackState === 'charging_beam') {
               boss.attackState = 'firing_beam';
-              boss.attackTimer = 30;
+              boss.attackTimer = 40; // Beam lasts 40 frames
               
+              // Create Beam Entity
+              // A beam is a large bullet that pierces
               this.bullets.push({
                   id: Math.random().toString(),
                   type: 'beam',
-                  x: boss.x - 800,
-                  y: boss.y + boss.h/2 - 20,
-                  w: 800,
-                  h: 40,
-                  vx: 0, 
-                  vy: 0,
+                  x: this.cameraX, // Starts from left of screen (or from boss to left)
+                  y: boss.y + boss.h / 2 - 40,
+                  w: boss.x - this.cameraX + 50, // Length
+                  h: 80,
+                  vx: 0, vy: 0,
                   color: COLOR_VENOM_SLIME,
                   direction: -1,
                   isDead: false,
-                  hp: 20,
-                  maxHp: 20
+                  hp: 40, // Dies when timer is done
+                  maxHp: 40
               });
-              audio.shoot();
-          } else {
+              
+              this.triggerShake(15);
+              audio.explode(); // Boom
+              
+              boss.animScaleX = 1.2; 
+              boss.animScaleY = 0.8; // Stretch
+          } else if (boss.attackState === 'firing_beam') {
               boss.attackState = 'idle';
-              boss.attackTimer = 120;
+              boss.attackTimer = 120; // Recovery
+              boss.animScaleX = 1;
+              boss.animScaleY = 1;
           }
       }
+
+      // Animation Elasticity
+      if (boss.animScaleX) boss.animScaleX += (1 - boss.animScaleX) * 0.1;
+      if (boss.animScaleY) boss.animScaleY += (1 - boss.animScaleY) * 0.1;
   }
 
-  draw() {
-    this.ctx.fillStyle = this.levelConfig.theme.bgTop;
-    this.ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    
-    const gradient = this.ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-    gradient.addColorStop(0, this.levelConfig.theme.bgTop);
-    gradient.addColorStop(1, this.levelConfig.theme.bgBottom);
-    this.ctx.fillStyle = gradient;
-    this.ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  drawSoldier(e: Entity) {
+      // CAPYBARA DRAWING LOGIC (Realistic Pixel Art Style)
+      const bob = Math.sin(this.frameCount * 0.2 + parseFloat(e.id)) * 2;
+      const dir = e.direction;
+      const flip = dir === -1;
+      
+      // Colors
+      const furColor = COLOR_CAPYBARA_FUR; // #8B4513
+      const legColor = '#5D4037'; // Darker limbs
+      const vestColor = COLOR_ENEMY_VEST;
+      
+      const isDrone = e.enemyClass === 'drone';
+      
+      if (isDrone) {
+          // DRONE DRAWING
+          const droneY = e.y + bob;
+          // Body
+          this.ctx.fillStyle = '#1e293b';
+          this.ctx.fillRect(e.x + 4, droneY, 32, 20);
+          // Rotor
+          this.ctx.fillStyle = '#94a3b8';
+          this.ctx.fillRect(e.x - 4, droneY - 4, 48, 4);
+          // Red Eye
+          this.ctx.fillStyle = '#ef4444';
+          this.ctx.beginPath();
+          this.ctx.arc(e.x + e.w/2, droneY + 10, 6, 0, Math.PI*2);
+          this.ctx.fill();
+          return;
+      }
 
-    this.ctx.save();
-    
-    if (this.screenShake > 0) {
-        const dx = (Math.random() - 0.5) * this.screenShake;
-        const dy = (Math.random() - 0.5) * this.screenShake;
-        this.ctx.translate(dx, dy);
-    }
-    
-    this.ctx.translate(-this.cameraX, 0);
+      // SOLDIER DRAWING
+      
+      // 1. Draw Legs (Background/Far side)
+      const legAnim = Math.sin(this.frameCount * 0.4 + parseFloat(e.id)) * 4;
+      const standing = e.vx === 0;
+      
+      this.ctx.fillStyle = legColor;
+      // Back Leg (Far)
+      this.ctx.fillRect(e.x + (flip ? e.w - 14 : 10) - (standing ? 0 : legAnim), e.y + e.h - 8, 5, 8);
+      // Front Leg (Far)
+      this.ctx.fillRect(e.x + (flip ? 10 : e.w - 14) + (standing ? 0 : legAnim), e.y + e.h - 8, 5, 8);
 
-    this.platforms.forEach(p => {
-        this.ctx.fillStyle = this.levelConfig.theme.platformBody;
-        this.ctx.fillRect(p.x, p.y, p.w, p.h);
-        this.ctx.fillStyle = this.levelConfig.theme.platformTop;
-        this.ctx.fillRect(p.x, p.y, p.w, 8);
-    });
-    
-    this.decorations.forEach(d => {
-        this.ctx.fillStyle = d.color;
-        this.ctx.fillRect(d.x, d.y, d.w, d.h);
-        if (d.text) {
-             this.ctx.fillStyle = d.secondaryColor || '#000';
-             this.ctx.font = 'bold 8px monospace';
-             this.ctx.textAlign = 'center';
-             this.ctx.fillText(d.text, d.x + d.w/2, d.y + d.h/2 + 3);
-        }
-    });
+      // 2. Draw Main Body (The "Loaf")
+      this.ctx.fillStyle = furColor;
+      // Main block (rounded top and bottom by omitting corners)
+      this.ctx.fillRect(e.x + 2, e.y + 8 + bob, e.w - 4, e.h - 12);
+      
+      // TACTICAL VEST
+      this.ctx.fillStyle = vestColor;
+      this.ctx.fillRect(e.x + 4, e.y + 12 + bob, e.w - 8, 12);
 
-    this.enemies.forEach(e => {
-       if (e.type === 'boss') {
-           this.drawBoss(e);
-       } else if (e.type === 'powerup') {
-           this.ctx.fillStyle = e.color;
-           const s = 1 + Math.sin(this.frameCount * 0.2) * 0.2;
-           const w = e.w * s;
-           const h = e.h * s;
-           this.ctx.fillRect(e.x + (e.w-w)/2, e.y + (e.h-h)/2, w, h);
-           
-           this.ctx.fillStyle = '#fff';
-           this.ctx.font = 'bold 10px monospace';
-           this.ctx.textAlign = 'center';
-           let char = '?';
-           if (e.subType === 'health') char = '♥';
-           else if (e.subType === 'bomb_refill') char = 'B';
-           else if (e.subType === 'machine') char = 'M';
-           else if (e.subType === 'spread') char = 'S';
-           else if (e.subType === 'laser') char = 'L';
-           this.ctx.fillText(char, e.x + e.w/2, e.y + e.h/2 + 4);
+      // 3. Draw Head
+      const headW = 18;
+      const headH = 16;
+      // Head position depends on direction
+      const headX = flip ? e.x - 2 : e.x + e.w - headW + 2;
+      const headY = e.y + 4 + bob;
 
-       } else if (e.type === 'sensor') {
-           this.ctx.fillStyle = e.color;
-           this.ctx.beginPath();
-           this.ctx.arc(e.x + e.w/2, e.y + e.h/2, e.w/2, 0, Math.PI*2);
-           this.ctx.fill();
-           if (Math.floor(this.frameCount / 10) % 2 === 0) {
-               this.ctx.fillStyle = '#ff0000';
-               this.ctx.beginPath();
-               this.ctx.arc(e.x + e.w/2, e.y + e.h/2, 5, 0, Math.PI*2);
-               this.ctx.fill();
-           }
-       } else {
-           this.ctx.fillStyle = e.color;
-           this.ctx.fillRect(e.x, e.y, e.w, e.h);
-           
-           this.ctx.fillStyle = COLOR_ENEMY_VISOR;
-           if (e.direction === 1) this.ctx.fillRect(e.x + e.w - 10, e.y + 6, 8, 4);
-           else this.ctx.fillRect(e.x + 2, e.y + 6, 8, 4);
-           
-           this.ctx.fillStyle = COLOR_ENEMY_VEST;
-           this.ctx.fillRect(e.x, e.y + 16, e.w, 12);
-           
-           this.ctx.fillStyle = '#000';
-           if (e.direction === 1) this.ctx.fillRect(e.x + e.w/2, e.y + 18, 24, 6);
-           else this.ctx.fillRect(e.x + e.w/2 - 24, e.y + 18, 24, 6);
-       }
-    });
+      this.ctx.fillStyle = furColor;
+      this.ctx.fillRect(headX, headY, headW, headH);
+      
+      // Snout shading (darker bridge)
+      this.ctx.fillStyle = '#793e11'; 
+      const snoutX = flip ? headX : headX + 8;
+      this.ctx.fillRect(snoutX, headY, 10, 6);
 
-    if (!this.player.isDead) {
-        if (!this.player.invulnerableUntil || this.player.invulnerableUntil < Date.now() || Math.floor(Date.now() / 50) % 2 === 0) {
-            this.ctx.fillStyle = this.player.color;
-            this.ctx.fillRect(this.player.x, this.player.y, this.player.w, this.player.h);
-            
-            this.ctx.fillStyle = COLOR_PLAYER_HEADBAND;
-            this.ctx.fillRect(this.player.x, this.player.y + 4, this.player.w, 6);
-            if (this.player.direction === 1) this.ctx.fillRect(this.player.x - 4, this.player.y + 4, 6, 4);
-            else this.ctx.fillRect(this.player.x + this.player.w - 2, this.player.y + 4, 6, 4);
+      // Nose (Nostrils)
+      this.ctx.fillStyle = '#3e2723'; // Dark brown hardcoded
+      const noseX = flip ? headX : headX + headW - 4;
+      this.ctx.fillRect(noseX, headY + 4, 4, 5);
 
-            this.ctx.fillStyle = COLOR_PLAYER_PANTS;
-            this.ctx.fillRect(this.player.x, this.player.y + this.player.h - 16, this.player.w, 16);
-            
-            this.ctx.fillStyle = '#333';
-            if (this.player.direction === 1) this.ctx.fillRect(this.player.x + 12, this.player.y + 20, 20, 8);
-            else this.ctx.fillRect(this.player.x - 8, this.player.y + 20, 20, 8);
-        }
-    }
+      // VISOR / GOGGLES (Red Eye)
+      this.ctx.fillStyle = COLOR_ENEMY_VISOR;
+      const eyeX = flip ? headX + 8 : headX + 6;
+      this.ctx.fillRect(eyeX, headY + 4, 8, 3);
 
-    this.bullets.forEach(b => {
-        if (b.type === 'beam') {
-            this.ctx.fillStyle = b.color;
-            this.ctx.globalAlpha = 0.8;
-            this.ctx.fillRect(b.x, b.y, b.w, b.h);
-            this.ctx.fillStyle = '#fff';
-            this.ctx.fillRect(b.x, b.y + 10, b.w, b.h - 20);
-            this.ctx.globalAlpha = 1.0;
-        } else if (b.type === 'explosion') {
-            this.ctx.fillStyle = b.color;
-            this.ctx.beginPath();
-            this.ctx.arc(b.x + b.w/2, b.y + b.h/2, b.w/2 * (b.hp/10), 0, Math.PI*2);
-            this.ctx.fill();
-        } else if (b.type === 'bomb') {
-            this.ctx.fillStyle = b.color;
-            this.ctx.beginPath();
-            this.ctx.arc(b.x + b.w/2, b.y + b.h/2, b.w/2, 0, Math.PI*2);
-            this.ctx.fill();
-            if (Math.random() > 0.5) {
-                this.ctx.fillStyle = '#ffcc00';
-                this.ctx.fillRect(b.x + b.w/2 - 1, b.y - 4, 2, 2);
-            }
-        } else {
-            this.ctx.fillStyle = b.color;
-            this.ctx.fillRect(b.x, b.y, b.w, b.h);
-        }
-    });
+      // 4. Draw Legs (Foreground/Near side)
+      this.ctx.fillStyle = furColor;
+      // Back Leg (Near)
+      this.ctx.fillRect(e.x + (flip ? e.w - 14 : 10) + (standing ? 0 : legAnim), e.y + e.h - 10 + bob, 5, 10);
+      // Front Leg (Near)
+      this.ctx.fillRect(e.x + (flip ? 10 : e.w - 14) - (standing ? 0 : legAnim), e.y + e.h - 10 + bob, 5, 10);
 
-    this.particles.forEach(p => {
-        if (p.text) {
-             this.ctx.fillStyle = p.color;
-             this.ctx.font = 'bold 10px monospace';
-             this.ctx.textAlign = 'center';
-             this.ctx.fillText(p.text, p.x, p.y);
-        } else {
-             this.ctx.fillStyle = p.color;
-             this.ctx.globalAlpha = p.life;
-             this.ctx.fillRect(p.x, p.y, p.w, p.h);
-             this.ctx.globalAlpha = 1.0;
-        }
-    });
-
-    this.ctx.restore();
-    this.drawHUD();
+      // 5. Weapon (Strap and Gun)
+      this.ctx.fillStyle = '#222';
+      const gunX = e.x + e.w/2 - 6;
+      const gunY = e.y + 16 + bob;
+      
+      // Gun body (Receiver)
+      this.ctx.fillRect(gunX, gunY, 12, 6);
+      
+      // Barrel
+      this.ctx.fillStyle = '#111';
+      if (flip) {
+          this.ctx.fillRect(e.x - 8, gunY + 2, 18, 4);
+      } else {
+          this.ctx.fillRect(e.x + e.w - 10, gunY + 2, 18, 4);
+      }
   }
 
   drawBoss(boss: Entity) {
@@ -1383,5 +1370,241 @@ export class GameEngine {
       }
 
       this.ctx.restore();
+  }
+  
+  draw() {
+    // Clear
+    this.ctx.fillStyle = '#111827'; // Dark fallback
+    this.ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    
+    // Background (Parallax)
+    const { bgTop, bgBottom } = this.levelConfig.theme;
+    
+    // Gradient Sky
+    const grad = this.ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+    grad.addColorStop(0, bgTop);
+    grad.addColorStop(1, bgBottom);
+    this.ctx.fillStyle = grad;
+    this.ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    
+    // Distant Mountains (Parallax 0.5)
+    this.ctx.save();
+    this.ctx.translate(-this.cameraX * 0.2, 0);
+    this.ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    this.ctx.beginPath();
+    this.ctx.moveTo(0, CANVAS_HEIGHT);
+    for(let i=0; i<20; i++) {
+        const x = i * 200;
+        const h = 100 + Math.sin(i)*50;
+        this.ctx.lineTo(x, CANVAS_HEIGHT - h);
+    }
+    this.ctx.lineTo(4000, CANVAS_HEIGHT);
+    this.ctx.fill();
+    this.ctx.restore();
+
+    this.ctx.save();
+    this.ctx.translate(-Math.floor(this.cameraX), 0); // Snap to pixel
+
+    // Platforms
+    this.platforms.forEach(p => {
+        // Only draw visible
+        if (p.x + p.w < this.cameraX || p.x > this.cameraX + CANVAS_WIDTH) return;
+        
+        // Body
+        this.ctx.fillStyle = this.levelConfig.theme.platformBody;
+        this.ctx.fillRect(p.x, p.y + 10, p.w, p.h - 10);
+        // Top
+        this.ctx.fillStyle = this.levelConfig.theme.platformTop;
+        this.ctx.fillRect(p.x, p.y, p.w, 10);
+        
+        // Detail / Texture
+        this.ctx.fillStyle = 'rgba(0,0,0,0.1)';
+        for(let i=0; i<p.w; i+=20) {
+            this.ctx.fillRect(p.x + i, p.y + 4, 4, 4);
+        }
+    });
+    
+    // Billboards & Decorations
+    this.decorations.forEach(d => {
+         if (d.x + d.w < this.cameraX || d.x > this.cameraX + CANVAS_WIDTH) return;
+         this.ctx.fillStyle = '#222'; // Pole
+         this.ctx.fillRect(d.x + d.w/2 - 2, d.y + d.h, 4, 100);
+         
+         this.ctx.fillStyle = d.color;
+         this.ctx.fillRect(d.x, d.y, d.w, d.h);
+         
+         if (d.text) {
+             this.ctx.fillStyle = d.secondaryColor || '#000';
+             this.ctx.font = 'bold 10px Arial';
+             this.ctx.textAlign = 'center';
+             this.ctx.fillText(d.text.split(' ')[0], d.x + d.w/2, d.y + 16);
+             if (d.text.split(' ')[1])
+                 this.ctx.fillText(d.text.split(' ')[1], d.x + d.w/2, d.y + 30);
+         }
+    });
+
+    // Enemies
+    this.enemies.forEach(e => {
+        if (e.x + e.w < this.cameraX || e.x > this.cameraX + CANVAS_WIDTH) return;
+        
+        if (e.type === 'enemy') {
+            this.drawSoldier(e);
+        } else if (e.type === 'boss') {
+            this.drawBoss(e);
+        } else if (e.type === 'sensor') {
+            const bob = Math.sin(this.frameCount * 0.1) * 5;
+            this.ctx.fillStyle = e.color;
+            // Central Eye
+            this.ctx.beginPath();
+            this.ctx.arc(e.x + e.w/2, e.y + e.h/2 + bob, e.w/2, 0, Math.PI*2);
+            this.ctx.fill();
+            // Ring
+            this.ctx.strokeStyle = '#a855f7';
+            this.ctx.lineWidth = 3;
+            this.ctx.beginPath();
+            this.ctx.arc(e.x + e.w/2, e.y + e.h/2 + bob, e.w/2 + 4, 0, Math.PI*2);
+            this.ctx.stroke();
+            
+        } else if (e.type === 'powerup') {
+            const bob = Math.sin(this.frameCount * 0.1) * 5;
+            this.ctx.fillStyle = e.color;
+            this.ctx.fillRect(e.x, e.y + bob, e.w, e.h);
+            this.ctx.fillStyle = '#fff';
+            this.ctx.textAlign = 'center';
+            this.ctx.font = 'bold 12px monospace';
+            
+            let label = '?';
+            if (e.subType === 'machine') label = 'M';
+            if (e.subType === 'spread') label = 'S';
+            if (e.subType === 'laser') label = 'L';
+            if (e.subType === 'health') label = '♥';
+            if (e.subType === 'bomb_refill') label = 'B';
+            
+            this.ctx.fillText(label, e.x + e.w/2, e.y + bob + 16);
+        }
+    });
+
+    // Player
+    if (!this.player.isDead) {
+        // Flash if invulnerable
+        if (!this.player.invulnerableUntil || Date.now() > this.player.invulnerableUntil || this.frameCount % 4 < 2) {
+             const p = this.player;
+             
+             // Check crouch
+             let h = p.h;
+             let y = p.y;
+             if (this.input.down) {
+                 h = p.h / 2;
+                 y = p.y + p.h / 2;
+             }
+             
+             // Legs Animation
+             const runAnim = Math.sin(this.frameCount * 0.5) * 5;
+             const moving = Math.abs(p.vx) > 0.1;
+             
+             // Back Leg
+             this.ctx.fillStyle = '#1e3a8a'; // Darker jeans
+             this.ctx.fillRect(p.x + 8 + (moving ? -runAnim : 0), y + h - 10, 8, 10);
+             
+             // Body
+             this.ctx.fillStyle = COLOR_PLAYER; // Skin
+             this.ctx.fillRect(p.x, y, p.w, h - 10);
+             
+             // Pants
+             this.ctx.fillStyle = COLOR_PLAYER_PANTS;
+             this.ctx.fillRect(p.x, y + h - 20, p.w, 10);
+             
+             // Vest / Shirt
+             this.ctx.fillStyle = '#ffffff';
+             this.ctx.fillRect(p.x, y + 10, p.w, 20);
+
+             // Headband
+             this.ctx.fillStyle = COLOR_PLAYER_HEADBAND;
+             this.ctx.fillRect(p.x, y + 4, p.w, 6);
+             // Bandana tail
+             if (moving) {
+                 this.ctx.fillRect(p.x - (p.direction * 10), y + 4 + Math.sin(this.frameCount*0.5)*2, 10, 4);
+             }
+
+             // Front Leg
+             this.ctx.fillStyle = COLOR_PLAYER_PANTS; 
+             this.ctx.fillRect(p.x + 8 + (moving ? runAnim : 0), y + h - 10, 8, 10);
+
+             // Gun
+             this.ctx.fillStyle = '#000';
+             let gunY = y + 20;
+             let gunX = p.x + (p.direction === 1 ? 16 : -10);
+             if (this.input.up) {
+                 gunY -= 10;
+                 gunX = p.x + 4;
+                 this.ctx.fillRect(gunX, gunY, 6, 20); // Up
+             } else {
+                 this.ctx.fillRect(gunX, gunY, 24, 6); // Forward
+             }
+        }
+    }
+
+    // Bullets / Particles
+    this.bullets.forEach(b => {
+        if (b.type === 'beam') {
+            this.ctx.fillStyle = b.color;
+            // Pulsing Beam
+            const thickness = b.h + Math.sin(this.frameCount * 0.8) * 10;
+            const yOffset = (b.h - thickness) / 2;
+            this.ctx.fillRect(b.x, b.y + yOffset, b.w, thickness);
+            // Core
+            this.ctx.fillStyle = '#ffffff';
+            this.ctx.fillRect(b.x, b.y + b.h/2 - 5, b.w, 10);
+            return;
+        }
+        
+        if (b.type === 'explosion') {
+            this.ctx.fillStyle = b.color;
+            this.ctx.beginPath();
+            this.ctx.arc(b.x + b.w/2, b.y + b.h/2, b.w/2 * (Math.random()*0.5 + 0.5), 0, Math.PI*2);
+            this.ctx.fill();
+            return;
+        }
+
+        if (b.type === 'bomb') {
+            this.ctx.fillStyle = b.color;
+            this.ctx.beginPath();
+            this.ctx.arc(b.x + b.w/2, b.y + b.h/2, 6, 0, Math.PI*2);
+            this.ctx.fill();
+            // Fuse
+            this.ctx.fillStyle = '#ef4444'; // Red spark
+            this.ctx.fillRect(b.x + b.w/2 - 1, b.y - 4, 2, 4);
+            return;
+        }
+
+        // Standard bullet
+        this.ctx.fillStyle = b.color;
+        this.ctx.fillRect(b.x, b.y, b.w, b.h);
+    });
+
+    this.particles.forEach(p => {
+       if (p.text) {
+           this.ctx.fillStyle = p.color;
+           this.ctx.font = 'bold 10px monospace';
+           this.ctx.fillText(p.text, p.x, p.y);
+           return;
+       }
+       this.ctx.fillStyle = p.color;
+       this.ctx.globalAlpha = p.life;
+       this.ctx.fillRect(p.x, p.y, p.w, p.h);
+       this.ctx.globalAlpha = 1.0;
+    });
+
+    this.ctx.restore();
+    
+    // HUD (Screen Space)
+    this.drawHUD();
+    
+    // Scanlines (if retro mode was handled in React, handled via CSS actually, but let's add subtle vignette here)
+    const gradV = this.ctx.createRadialGradient(CANVAS_WIDTH/2, CANVAS_HEIGHT/2, CANVAS_HEIGHT/3, CANVAS_WIDTH/2, CANVAS_HEIGHT/2, CANVAS_HEIGHT);
+    gradV.addColorStop(0, 'rgba(0,0,0,0)');
+    gradV.addColorStop(1, 'rgba(0,0,0,0.3)');
+    this.ctx.fillStyle = gradV;
+    this.ctx.fillRect(0,0,CANVAS_WIDTH, CANVAS_HEIGHT);
   }
 }
