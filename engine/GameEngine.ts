@@ -39,7 +39,8 @@ import {
   COLOR_POWERUP_HEALTH,
   COLOR_SENSOR,
   COLOR_BOMB,
-  COLOR_EXPLOSION
+  COLOR_EXPLOSION,
+  BILLBOARD_BRANDS
 } from '../constants';
 import { audio } from '../services/audioService';
 
@@ -53,6 +54,7 @@ export class GameEngine {
   boss: Entity | null = null;
   bullets: Entity[] = [];
   enemies: Entity[] = [];
+  decorations: Entity[] = []; // Billboards and background props
   platforms: Platform[] = [];
   particles: Particle[] = [];
   
@@ -116,6 +118,25 @@ export class GameEngine {
           const w = Math.random() * 150 + 80;
           this.createPlatform(currentX, y, w, 20);
           
+          // ADD BILLBOARDS (Ads Opportunity)
+          if (Math.random() > 0.6) {
+              const brand = BILLBOARD_BRANDS[Math.floor(Math.random() * BILLBOARD_BRANDS.length)];
+              this.decorations.push({
+                  id: `billboard-${currentX}`,
+                  type: 'decoration',
+                  x: currentX + w/2 - 40,
+                  y: y - 50, // Sit on platform
+                  w: 80,
+                  h: 40,
+                  vx: 0, vy: 0,
+                  color: brand.bg,
+                  secondaryColor: brand.color,
+                  text: brand.text,
+                  isDead: false,
+                  hp: 1, maxHp: 1, direction: 1
+              });
+          }
+
           // Add enemies (Capybaras)
           if (Math.random() > 0.3) {
             // Capybaras are shorter and wider
@@ -629,6 +650,8 @@ export class GameEngine {
           e.x += e.vx;
           e.y += Math.sin(this.frameCount * 0.1) * 3;
           if (e.x < this.cameraX - 100) e.isDead = true;
+      } else if (e.type === 'decoration') {
+          // Decorations are passive
       } else {
         // Normal Enemy Logic
         if (e.x > this.cameraX - 100 && e.x < this.cameraX + CANVAS_WIDTH + 100) {
@@ -713,7 +736,7 @@ export class GameEngine {
       // Player Bullet Hits Enemy
       if (b.color === COLOR_BULLET || b.color === COLOR_POWERUP_LASER) { 
          this.enemies.forEach(e => {
-            if (!e.isDead && e.type !== 'powerup' && this.checkCollision(b, e)) {
+            if (!e.isDead && e.type !== 'powerup' && e.type !== 'decoration' && this.checkCollision(b, e)) {
                // Logic for penetrating enemies (Laser)
                const alreadyHit = b.hitEnemyIds?.includes(e.id);
                
@@ -793,7 +816,7 @@ export class GameEngine {
     
     // Player Body Collisions
     this.enemies.forEach(e => {
-        if (!e.isDead && e.type !== 'powerup' && !this.player.isDead && this.checkCollision(this.player, e)) {
+        if (!e.isDead && e.type !== 'powerup' && e.type !== 'decoration' && !this.player.isDead && this.checkCollision(this.player, e)) {
              if (Date.now() > (this.player.invulnerableUntil || 0)) {
                 this.player.hp--;
                 this.triggerShake(10);
@@ -814,6 +837,9 @@ export class GameEngine {
 
     this.bullets = this.bullets.filter(b => !b.isDead);
     this.enemies = this.enemies.filter(e => !e.isDead);
+    
+    // Clean up decorations
+    this.decorations = this.decorations.filter(d => d.x > this.cameraX - 100);
 
     this.particles.forEach(p => {
       p.x += p.vx;
@@ -1088,25 +1114,57 @@ export class GameEngine {
         );
     }
 
-    // 1. Draw Background
+    // 1. Draw PARALLAX Background
+    // Layer 0: Solid color
     const gradient = this.ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
     gradient.addColorStop(0, this.levelConfig.theme.bgTop);
     gradient.addColorStop(1, this.levelConfig.theme.bgBottom);
     this.ctx.fillStyle = gradient;
     this.ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
-    // Starfield/Spores
+    // Layer 1: Slow Stars/Clouds (moves at 0.1x speed)
+    this.ctx.save();
     this.ctx.fillStyle = 'rgba(255,255,255,0.2)';
-    for(let i=0; i<50; i++) {
-        const x = (i * 137 + this.cameraX * 0.5) % CANVAS_WIDTH; 
+    for(let i=0; i<40; i++) {
+        // Calculate position relative to camera with parallax factor
+        const rawX = i * 200; 
+        const paraX = (rawX - this.cameraX * 0.1) % (CANVAS_WIDTH + 200);
+        // Handle wrapping for positive values
+        const drawX = paraX < 0 ? paraX + (CANVAS_WIDTH + 200) : paraX;
+        
         const y = (i * 97) % CANVAS_HEIGHT;
         const size = (i % 3) + 1;
-        this.ctx.fillRect(x, y, size, size);
+        this.ctx.fillRect(drawX - 100, y, size, size); // -100 offset to handle edge spawn
     }
+    this.ctx.restore();
+
+    // Layer 2: Faster Mountains/Structures (moves at 0.3x speed)
+    this.ctx.save();
+    this.ctx.fillStyle = 'rgba(0,0,0,0.1)';
+    for(let i=0; i<15; i++) {
+        const rawX = i * 300;
+        const paraX = (rawX - this.cameraX * 0.3) % (CANVAS_WIDTH + 400);
+        const drawX = paraX < 0 ? paraX + (CANVAS_WIDTH + 400) : paraX;
+        
+        const h = 100 + (i % 5) * 30;
+        this.ctx.beginPath();
+        this.ctx.moveTo(drawX - 100, CANVAS_HEIGHT);
+        this.ctx.lineTo(drawX + 50, CANVAS_HEIGHT - h);
+        this.ctx.lineTo(drawX + 200, CANVAS_HEIGHT);
+        this.ctx.fill();
+    }
+    this.ctx.restore();
     
+    // MAIN GAME LAYER
     this.ctx.translate(-Math.floor(this.cameraX), 0);
 
-    // 2. Draw Platforms
+    // 2. Draw Platforms & Decorations
+    this.decorations.forEach(d => {
+        if (d.type === 'decoration') {
+            this.drawBillboard(d);
+        }
+    });
+
     this.platforms.forEach(p => {
       this.ctx.fillStyle = this.levelConfig.theme.platformBody;
       this.ctx.fillRect(p.x, p.y + 6, p.w, p.h - 6);
@@ -1124,7 +1182,7 @@ export class GameEngine {
       if (e.type === 'boss') this.drawBoss(e);
       else if (e.type === 'powerup') this.drawPowerUp(e);
       else if (e.type === 'sensor') this.drawSensor(e);
-      else this.drawSoldier(e);
+      else if (e.type !== 'decoration') this.drawSoldier(e);
     });
 
     if (!this.player.isDead) {
@@ -1247,6 +1305,47 @@ export class GameEngine {
        this.ctx.textAlign = 'center';
        this.ctx.fillText("MISSION FAILED", CANVAS_WIDTH/2, CANVAS_HEIGHT/2);
     }
+  }
+  
+  drawBillboard(d: Entity) {
+      // Legs
+      this.ctx.fillStyle = '#475569';
+      this.ctx.fillRect(d.x + 10, d.y + d.h, 6, 20);
+      this.ctx.fillRect(d.x + d.w - 16, d.y + d.h, 6, 20);
+      
+      // Board Background
+      this.ctx.fillStyle = '#0f172a'; // Dark frame
+      this.ctx.fillRect(d.x - 2, d.y - 2, d.w + 4, d.h + 4);
+      
+      this.ctx.fillStyle = d.color;
+      this.ctx.fillRect(d.x, d.y, d.w, d.h);
+      
+      // Text
+      if (d.text) {
+          this.ctx.fillStyle = d.secondaryColor || '#000';
+          this.ctx.font = 'bold 8px monospace';
+          this.ctx.textAlign = 'center';
+          this.ctx.textBaseline = 'middle';
+          
+          // Split text if too long
+          if (d.text.length > 8) {
+              const parts = d.text.split(' ');
+              this.ctx.fillText(parts[0], d.x + d.w/2, d.y + d.h/3);
+              this.ctx.fillText(parts[1] || '', d.x + d.w/2, d.y + d.h*0.7);
+          } else {
+              this.ctx.fillText(d.text, d.x + d.w/2, d.y + d.h/2);
+          }
+      }
+      
+      // Shine animation
+      const shinePos = (this.frameCount * 2) % (d.w + 40) - 20;
+      this.ctx.fillStyle = 'rgba(255,255,255,0.2)';
+      this.ctx.beginPath();
+      this.ctx.moveTo(d.x + shinePos, d.y);
+      this.ctx.lineTo(d.x + shinePos + 10, d.y);
+      this.ctx.lineTo(d.x + shinePos - 10, d.y + d.h);
+      this.ctx.lineTo(d.x + shinePos - 20, d.y + d.h);
+      this.ctx.fill();
   }
   
   drawPowerUp(e: Entity) {

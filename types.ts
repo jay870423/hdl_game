@@ -15,7 +15,7 @@ export interface Rect {
   h: number;
 }
 
-export type EntityType = 'player' | 'enemy' | 'boss' | 'bullet' | 'particle' | 'powerup' | 'sensor' | 'bomb' | 'explosion' | 'beam';
+export type EntityType = 'player' | 'enemy' | 'boss' | 'bullet' | 'particle' | 'powerup' | 'sensor' | 'bomb' | 'explosion' | 'beam' | 'decoration';
 export type WeaponType = 'normal' | 'spread' | 'machine' | 'laser';
 export type PowerUpType = 'spread' | 'machine' | 'laser' | 'health' | 'bomb_refill';
 
@@ -61,6 +61,10 @@ export interface Entity extends Rect {
   animScaleX?: number;   // Breathing animation width
   animScaleY?: number;   // Breathing animation height
   targetY?: number;      // For smooth movement
+
+  // Decoration / Billboard specific
+  text?: string;
+  secondaryColor?: string;
 }
 
 export interface Platform extends Rect {

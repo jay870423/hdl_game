@@ -6,7 +6,7 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from './constants';
 import MobileControls from './components/MobileControls';
 import { generateMissionData } from './services/geminiService';
 import { audio } from './services/audioService';
-import { Gamepad2, Skull, Trophy, Play, Loader2, ArrowRight, Volume2, VolumeX, Smartphone } from 'lucide-react';
+import { Gamepad2, Skull, Trophy, Play, Loader2, ArrowRight, Volume2, VolumeX, Smartphone, Monitor, Share2, Copy } from 'lucide-react';
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -14,9 +14,12 @@ export default function App() {
   const [mission, setMission] = useState<MissionData | null>(null);
   const [currentLevel, setCurrentLevel] = useState(1);
   const [finalScore, setFinalScore] = useState(0);
+  const [highScore, setHighScore] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [isLandscape, setIsLandscape] = useState(true);
   const [ignoreOrientation, setIgnoreOrientation] = useState(false);
+  const [isRetroMode, setIsRetroMode] = useState(true);
+  const [showShareToast, setShowShareToast] = useState(false);
   
   const inputState = useRef<InputState>({
     left: false,
@@ -30,6 +33,12 @@ export default function App() {
 
   const engineRef = useRef<GameEngine | null>(null);
   const requestRef = useRef<number>(0);
+
+  // --- Initial Load & High Score ---
+  useEffect(() => {
+    const saved = localStorage.getItem('genforce_highscore');
+    if (saved) setHighScore(parseInt(saved, 10));
+  }, []);
 
   // --- Orientation Check ---
   useEffect(() => {
@@ -88,7 +97,12 @@ export default function App() {
         engineRef.current.draw();
 
         if (engineRef.current.isGameOver) {
-          setFinalScore(engineRef.current.score);
+          const s = engineRef.current.score;
+          setFinalScore(s);
+          if (s > highScore) {
+              setHighScore(s);
+              localStorage.setItem('genforce_highscore', s.toString());
+          }
           setGameState(GameState.GAME_OVER);
         } else if (engineRef.current.isVictory) {
           setFinalScore(engineRef.current.score + (currentLevel * 1000)); 
@@ -171,6 +185,21 @@ export default function App() {
       setIsMuted(muted);
   };
 
+  const shareScore = () => {
+      const text = `I scored ${finalScore} in Gen-Force: Neural Ops! Can you beat the Capy-Symbiote invasion? 🎮🔫 #GenForce #RetroGame`;
+      if (navigator.share) {
+          navigator.share({
+              title: 'Gen-Force High Score',
+              text: text,
+              url: window.location.href
+          }).catch(console.error);
+      } else {
+          navigator.clipboard.writeText(text + " " + window.location.href);
+          setShowShareToast(true);
+          setTimeout(() => setShowShareToast(false), 2000);
+      }
+  };
+
   if (!isLandscape && window.innerWidth < 768 && !ignoreOrientation) {
      return (
        <div className="w-full h-[100dvh] bg-black flex flex-col items-center justify-center text-white p-8 text-center font-['Press_Start_2P']">
@@ -197,18 +226,34 @@ export default function App() {
           ref={canvasRef}
           width={CANVAS_WIDTH}
           height={CANVAS_HEIGHT}
-          className="w-full h-full object-contain block"
+          className={`w-full h-full object-contain block transition-all duration-300 ${isRetroMode ? 'contrast-125 saturate-120' : ''}`}
           style={{ imageRendering: 'pixelated' }}
         />
         
-        <div className="hidden md:block absolute inset-0 pointer-events-none bg-[url('https://raw.githubusercontent.com/zlatkov/scanlines/master/scanlines.png')] opacity-10 mix-blend-overlay"></div>
+        {/* Retro CRT Filter Overlay */}
+        {isRetroMode && (
+            <div className="pointer-events-none absolute inset-0 z-0">
+                <div className="absolute inset-0 bg-[url('https://raw.githubusercontent.com/zlatkov/scanlines/master/scanlines.png')] opacity-30 mix-blend-overlay animate-[scanline_10s_linear_infinite]"></div>
+                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/5 to-transparent h-2 w-full animate-[scan_3s_linear_infinite] opacity-10"></div>
+                <div className="absolute inset-0 shadow-[inset_0_0_100px_rgba(0,0,0,0.9)]"></div>
+            </div>
+        )}
         
-        <button 
-            onClick={toggleMute}
-            className="absolute top-4 right-4 z-50 text-white/50 hover:text-white p-2"
-        >
-            {isMuted ? <VolumeX /> : <Volume2 />}
-        </button>
+        <div className="absolute top-4 right-4 z-50 flex gap-2">
+            <button 
+                onClick={() => setIsRetroMode(!isRetroMode)}
+                className={`p-2 rounded border-2 transition-colors ${isRetroMode ? 'border-green-500 text-green-500 bg-green-500/20' : 'border-gray-600 text-gray-600'}`}
+                title="Toggle Retro CRT Mode"
+            >
+                <Monitor className="w-4 h-4" />
+            </button>
+            <button 
+                onClick={toggleMute}
+                className="text-white/50 hover:text-white p-2"
+            >
+                {isMuted ? <VolumeX /> : <Volume2 />}
+            </button>
+        </div>
       </div>
 
       {gameState === GameState.MENU && (
@@ -216,13 +261,16 @@ export default function App() {
             <h1 className="text-3xl md:text-5xl text-transparent bg-clip-text bg-gradient-to-b from-yellow-400 to-orange-600 font-black mb-8 leading-tight drop-shadow-[4px_4px_0_rgba(185,28,28,0.8)]">
                 GEN-FORCE<br/>NEURAL OPS
             </h1>
+            <div className="mb-8 text-yellow-400 text-xs md:text-sm animate-pulse border-2 border-yellow-400 px-4 py-2 rounded">
+               HIGH SCORE: {highScore}
+            </div>
             <button 
                 onClick={startNewGame}
                 className="group relative px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold text-lg uppercase tracking-widest transition-all transform hover:scale-105"
             >
                 <div className="flex items-center gap-3">
                     <Play className="w-6 h-6 fill-current" />
-                    <span>Deploy</span>
+                    <span>INSERT COIN</span>
                 </div>
             </button>
             <p className="mt-8 text-gray-400 text-[10px] md:text-xs font-sans">
@@ -235,6 +283,7 @@ export default function App() {
         <div className="absolute inset-0 bg-black flex flex-col items-center justify-center text-white z-20">
             <Loader2 className="w-16 h-16 animate-spin text-green-500 mb-4" />
             <h2 className="text-green-500 text-lg animate-pulse">DECODING LEVEL {currentLevel}...</h2>
+            <div className="mt-8 text-[10px] text-gray-500 uppercase tracking-widest">Sponsored by Gen-Cola</div>
         </div>
       )}
 
@@ -252,13 +301,20 @@ export default function App() {
         <div className="absolute inset-0 bg-red-900/90 flex flex-col items-center justify-center text-center text-white z-20">
             <Skull className="w-20 h-20 mb-4 animate-bounce" />
             <h2 className="text-3xl font-bold mb-2">M.I.A.</h2>
+            <p className="text-lg text-yellow-400 mb-2">SCORE: {finalScore}</p>
             <p className="text-sm mb-8 font-sans">Wait for reinforcements?</p>
             <div className="flex gap-4">
                 <button 
                     onClick={restartLevel}
-                    className="px-6 py-3 bg-white text-red-900 font-bold hover:bg-gray-200 uppercase text-sm"
+                    className="px-6 py-3 bg-white text-red-900 font-bold hover:bg-gray-200 uppercase text-sm shadow-lg transform active:scale-95 transition-transform"
                 >
                     Retry Level
+                </button>
+                <button 
+                    onClick={shareScore}
+                    className="px-6 py-3 bg-blue-600 text-white font-bold hover:bg-blue-500 uppercase text-sm flex items-center gap-2 shadow-lg transform active:scale-95 transition-transform"
+                >
+                    <Share2 className="w-4 h-4" /> Share
                 </button>
                 <button 
                     onClick={() => setGameState(GameState.MENU)}
@@ -267,6 +323,7 @@ export default function App() {
                     Abort
                 </button>
             </div>
+            <div className="mt-8 text-[10px] text-white/50">AD: Neural Net - The Future is Now</div>
         </div>
       )}
 
@@ -274,15 +331,18 @@ export default function App() {
         <div className="absolute inset-0 bg-green-900/90 flex flex-col items-center justify-center text-center text-white z-20">
             <Trophy className="w-20 h-20 mb-4 text-yellow-400 animate-pulse" />
             <h2 className="text-3xl font-bold mb-2 text-yellow-400">AREA SECURED</h2>
+            <p className="text-lg mb-6">SCORE: {finalScore}</p>
             <p className="mb-8 font-sans text-sm opacity-80">Proceed to next sector.</p>
             
-            <button 
-                onClick={nextLevel}
-                className="group px-8 py-4 bg-yellow-400 text-green-900 font-bold hover:bg-yellow-300 transition-colors uppercase flex items-center gap-2"
-            >
-                <span>Level {currentLevel + 1}</span>
-                <ArrowRight className="w-5 h-5" />
-            </button>
+            <div className="flex gap-4">
+                <button 
+                    onClick={nextLevel}
+                    className="group px-8 py-4 bg-yellow-400 text-green-900 font-bold hover:bg-yellow-300 transition-colors uppercase flex items-center gap-2 shadow-xl transform hover:scale-105 active:scale-95"
+                >
+                    <span>Level {currentLevel + 1}</span>
+                    <ArrowRight className="w-5 h-5" />
+                </button>
+            </div>
         </div>
       )}
 
@@ -296,13 +356,27 @@ export default function App() {
             <p className="text-xl md:text-2xl mb-8 font-mono border-2 border-yellow-400 px-6 py-3 rounded bg-black/30">
                 FINAL SCORE: {finalScore}
             </p>
-            <button 
-                onClick={() => setGameState(GameState.MENU)}
-                className="px-8 py-4 bg-white text-blue-900 font-bold hover:bg-gray-200 transition-colors uppercase"
-            >
-                Main Menu
-            </button>
+            <div className="flex gap-4">
+                <button 
+                    onClick={shareScore}
+                    className="px-8 py-4 bg-yellow-500 text-blue-900 font-bold hover:bg-yellow-400 transition-colors uppercase flex items-center gap-2"
+                >
+                    <Share2 className="w-5 h-5" /> Share Record
+                </button>
+                <button 
+                    onClick={() => setGameState(GameState.MENU)}
+                    className="px-8 py-4 bg-white text-blue-900 font-bold hover:bg-gray-200 transition-colors uppercase"
+                >
+                    Main Menu
+                </button>
+            </div>
         </div>
+      )}
+
+      {showShareToast && (
+          <div className="absolute bottom-10 bg-white text-black px-4 py-2 rounded font-sans text-sm font-bold shadow-lg animate-bounce">
+              Copied to Clipboard!
+          </div>
       )}
 
       {gameState === GameState.PLAYING && (
@@ -315,6 +389,10 @@ export default function App() {
             10% { opacity: 1; transform: translateY(0); }
             80% { opacity: 1; }
             100% { opacity: 0; }
+        }
+        @keyframes scan {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(100vh); }
         }
       `}</style>
     </div>

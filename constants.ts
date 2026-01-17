@@ -41,6 +41,15 @@ export const COLOR_EXPLOSION = '#f59e0b'; // Orange fire
 export const PLAYER_WIDTH = 24;
 export const PLAYER_HEIGHT = 48;
 
+// Mock Brands for Billboards (Demonstrating Ad Space)
+export const BILLBOARD_BRANDS = [
+  { text: "GEN-COLA", color: "#ef4444", bg: "#fff" },
+  { text: "NEURAL NET", color: "#3b82f6", bg: "#1e293b" },
+  { text: "YOUR AD HERE", color: "#fbbf24", bg: "#000" },
+  { text: "CYBER EATS", color: "#22c55e", bg: "#fff" },
+  { text: "PIXEL WEAR", color: "#a855f7", bg: "#111" }
+];
+
 export const LEVELS: LevelConfig[] = [
   {
     id: 1,
