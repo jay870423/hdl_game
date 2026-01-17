@@ -6,7 +6,7 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from './constants';
 import MobileControls from './components/MobileControls';
 import { generateMissionData } from './services/geminiService';
 import { audio } from './services/audioService';
-import { Gamepad2, Skull, Trophy, Play, Loader2, ArrowRight, Volume2, VolumeX, Smartphone, Monitor, Share2, Copy } from 'lucide-react';
+import { Gamepad2, Skull, Trophy, Play, Loader2, ArrowRight, Volume2, VolumeX, Smartphone, Monitor, Share2 } from 'lucide-react';
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);

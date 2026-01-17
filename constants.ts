@@ -20,6 +20,15 @@ export const COLOR_PLAYER_PANTS = '#3b82f6'; // Blue jeans
 export const COLOR_CAPYBARA_FUR = '#8B4513'; // SaddleBrown
 export const COLOR_CAPYBARA_NOSE = '#3e2723'; // Dark Brown
 export const COLOR_CAPYBARA_EAR = '#2e1a12';
+
+// Enemy Uniforms
+export const COLOR_ENEMY_VEST = '#1e293b'; // Dark tactical vest
+export const COLOR_ENEMY_VISOR = '#ef4444'; // Glowing red eyes
+
+// Boss Colors
+export const COLOR_BOSS_ARMOR = '#334155'; // Metal armor
+export const COLOR_BOSS_CORE = '#dc2626'; // Glowing weak point
+
 export const COLOR_VENOM_SKIN = '#09090b'; // Almost Black (Zinc 950)
 export const COLOR_VENOM_EYES = '#ffffff'; // White
 export const COLOR_VENOM_SLIME = '#84cc16'; // Lime Green
@@ -27,7 +36,7 @@ export const COLOR_CARNAGE_SKIN = '#7f1d1d'; // Dark Red
 export const COLOR_CARNAGE_SLIME = '#ef4444'; // Bright Red
 
 export const COLOR_BULLET = '#fbbf24'; // Player Yellow
-export const COLOR_BULLET_ENEMY = '#a3e635'; // Toxic Slime Green
+export const COLOR_BULLET_ENEMY = '#ef4444'; // Enemy Red
 
 export const COLOR_POWERUP_SPREAD = '#ef4444'; 
 export const COLOR_POWERUP_MACHINE = '#3b82f6';

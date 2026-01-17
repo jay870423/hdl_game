@@ -1,4 +1,3 @@
-
 import { 
   Entity, 
   Platform, 
@@ -7,7 +6,8 @@ import {
   Particle,
   LevelConfig,
   PowerUpType,
-  Point
+  Point,
+  EnemyClass
 } from '../types';
 import { 
   GRAVITY, 
@@ -28,8 +28,11 @@ import {
   COLOR_CAPYBARA_FUR,
   COLOR_CAPYBARA_NOSE,
   COLOR_CAPYBARA_EAR,
+  COLOR_ENEMY_VEST,
+  COLOR_ENEMY_VISOR,
+  COLOR_BOSS_ARMOR,
+  COLOR_BOSS_CORE,
   COLOR_VENOM_SKIN,
-  COLOR_VENOM_EYES,
   COLOR_VENOM_SLIME,
   COLOR_CARNAGE_SKIN,
   COLOR_CARNAGE_SLIME,
@@ -118,7 +121,7 @@ export class GameEngine {
           const w = Math.random() * 150 + 80;
           this.createPlatform(currentX, y, w, 20);
           
-          // ADD BILLBOARDS (Ads Opportunity)
+          // ADD BILLBOARDS (Ads Opportunity) - Randomly place them on platforms
           if (Math.random() > 0.6) {
               const brand = BILLBOARD_BRANDS[Math.floor(Math.random() * BILLBOARD_BRANDS.length)];
               this.decorations.push({
@@ -137,19 +140,33 @@ export class GameEngine {
               });
           }
 
-          // Add enemies (Capybaras)
-          if (Math.random() > 0.3) {
-            // Capybaras are shorter and wider
-            this.spawnEnemy(currentX + w / 2, y - 40, 'enemy');
+          // Add Enemies: Now with variety!
+          if (Math.random() > 0.2) {
+            // Determine enemy type based on position/randomness
+            let type: EnemyClass = 'runner';
+            const r = Math.random();
+            
+            if (r > 0.7) type = 'sniper';
+            else if (r > 0.9) type = 'drone';
+            
+            // Drones spawn higher
+            const spawnY = type === 'drone' ? y - 100 - Math.random()*50 : y - 40;
+            
+            this.spawnEnemy(currentX + w / 2, spawnY, type);
           }
           
           if (Math.random() > 0.6) {
              this.createPlatform(currentX + 50, y - 100, w - 40, 20);
-             this.spawnEnemy(currentX + w / 2, y - 140, 'enemy');
+             // High platforms get snipers
+             this.spawnEnemy(currentX + w / 2, y - 140, 'sniper');
           }
       } else {
           // Add floating islands over pit
           this.createPlatform(currentX, CANVAS_HEIGHT - 150, 60, 20);
+          // Pits might have drones hovering
+          if (Math.random() > 0.5) {
+              this.spawnEnemy(currentX + 30, CANVAS_HEIGHT - 200, 'drone');
+          }
       }
       
       currentX += 200 + (Math.random() * 100);
@@ -164,22 +181,31 @@ export class GameEngine {
     this.platforms.push({ x, y, w, h, type: 'solid' });
   }
 
-  spawnEnemy(x: number, y: number, type: 'enemy') {
+  spawnEnemy(x: number, y: number, enemyClass: EnemyClass) {
+    const isDrone = enemyClass === 'drone';
+    // const isSniper = enemyClass === 'sniper';
+    
+    // Drones float, others use gravity
+    const vy = isDrone ? 0 : 0;
+    // Snipers don't move X usually
+    const vx = enemyClass === 'sniper' ? 0 : (isDrone ? -ENEMY_SPEED * 1.5 : -ENEMY_SPEED);
+
     this.enemies.push({
       id: Math.random().toString(),
-      type,
+      type: 'enemy',
+      enemyClass,
       x,
       y,
-      w: 40, // Wider for Capybara body
-      h: 30, // Shorter for quadruped
-      vx: -ENEMY_SPEED * (1 + (this.levelConfig.id * 0.1)), 
-      vy: 0,
+      w: 40, 
+      h: isDrone ? 30 : 36, // Soldiers are slightly taller
+      vx, 
+      vy,
       color: COLOR_CAPYBARA_FUR,
       direction: -1,
       isDead: false,
-      hp: 1 + Math.floor(this.levelConfig.id / 3),
-      maxHp: 1 + Math.floor(this.levelConfig.id / 3),
-      frameTimer: 0
+      hp: isDrone ? 1 : 2, // Soldiers are tougher
+      maxHp: isDrone ? 1 : 2,
+      frameTimer: Math.floor(Math.random() * 100) // Desync animations
     });
   }
 
@@ -291,7 +317,7 @@ export class GameEngine {
         ? (isCrouching ? 34 : 10) 
         : shooter.h / 2;
 
-    const startX = shooter.x + shooter.w / 2;
+    const startX = shooter.x + (direction > 0 ? shooter.w : 0);
     const startY = shooter.y + spawnYOffset;
 
     if (isPlayer && this.player.weapon === 'spread') {
@@ -332,7 +358,7 @@ export class GameEngine {
         this.bullets.push(b);
 
     } else {
-        // Normal & Machine Gun
+        // Normal & Machine Gun & Enemy Fire
         let vx = direction * speed;
         let vy = 0;
         
@@ -341,7 +367,17 @@ export class GameEngine {
             if (this.input.right) vx = speed;
             else if (this.input.left) vx = -speed;
             else vx = 0;
+        } else if (!isPlayer) {
+            // Enemy aiming logic (simple prediction)
+            if (shooter.enemyClass === 'sniper' || shooter.enemyClass === 'drone') {
+                const dx = (this.player.x + this.player.w/2) - startX;
+                const dy = (this.player.y + this.player.h/2) - startY;
+                const mag = Math.sqrt(dx*dx + dy*dy);
+                vx = (dx/mag) * speed;
+                vy = (dy/mag) * speed;
+            }
         }
+
         this.bullets.push(this.createBullet(startX, startY, vx, vy, isPlayer, false));
     }
     
@@ -354,8 +390,8 @@ export class GameEngine {
           type: 'bullet',
           x,
           y,
-          w: isPlayer ? 10 : 10,
-          h: isPlayer ? 10 : 10,
+          w: isPlayer ? 10 : 8,
+          h: isPlayer ? 10 : 8,
           vx,
           vy,
           color: isPlayer ? COLOR_BULLET : COLOR_BULLET_ENEMY,
@@ -651,25 +687,59 @@ export class GameEngine {
           e.y += Math.sin(this.frameCount * 0.1) * 3;
           if (e.x < this.cameraX - 100) e.isDead = true;
       } else if (e.type === 'decoration') {
-          // Decorations are passive
+          // Decorations are passive background objects
       } else {
-        // Normal Enemy Logic
+        // ENEMY COMBAT LOGIC
         if (e.x > this.cameraX - 100 && e.x < this.cameraX + CANVAS_WIDTH + 100) {
-            e.vy += GRAVITY;
-            e.x += e.vx;
-            e.y += e.vy;
+            
+            // Movement Logic
+            if (e.enemyClass === 'drone') {
+                e.y += Math.sin(this.frameCount * 0.1 + parseFloat(e.id)) * 2;
+                e.x += e.vx;
+            } else if (e.enemyClass === 'sniper') {
+                // Snipers don't move X, they camp
+                // Look at player
+                e.direction = this.player.x < e.x ? -1 : 1;
+            } else {
+                // Runners (Standard)
+                e.vy += GRAVITY;
+                e.x += e.vx;
+                e.y += e.vy;
+            }
 
-            let onGround = false;
-            for (const plat of this.platforms) {
-                if (this.checkCollision(e, plat)) {
-                   if (e.vy > 0 && e.y < plat.y + plat.h) {
-                       e.y = plat.y - e.h;
-                       e.vy = 0;
-                       onGround = true;
-                   }
+            // Platform Collision for walking enemies
+            if (e.enemyClass !== 'drone') {
+                let onGround = false;
+                for (const plat of this.platforms) {
+                    if (this.checkCollision(e, plat)) {
+                        if (e.vy > 0 && e.y < plat.y + plat.h) {
+                            e.y = plat.y - e.h;
+                            e.vy = 0;
+                            onGround = true;
+                        }
+                    }
+                }
+                if (!onGround && e.y > CANVAS_HEIGHT) e.isDead = true;
+            }
+
+            // SHOOTING LOGIC
+            // Check if on screen and not dead
+            if (e.x > this.cameraX && e.x < this.cameraX + CANVAS_WIDTH) {
+                // Fire rate differs by class
+                let fireRate = 200; // default frames
+                if (e.enemyClass === 'sniper') fireRate = 180;
+                if (e.enemyClass === 'drone') fireRate = 220;
+                if (e.enemyClass === 'runner') fireRate = 300;
+
+                // Add randomness to fire rate
+                const fireTick = (this.frameCount + parseInt(e.id.slice(-3))) % fireRate;
+                
+                if (fireTick === 0) {
+                    // Shoot towards player
+                    const speed = 4;
+                    this.shoot(e, speed, e.direction, false);
                 }
             }
-            if (!onGround && e.y > CANVAS_HEIGHT) e.isDead = true;
         }
       }
     });
@@ -851,722 +921,232 @@ export class GameEngine {
   }
 
   updateBoss(boss: Entity) {
-      const levelId = this.levelConfig.id;
-      
-      // MOVEMENT PATTERNS VARY BY BOSS TYPE
-      
-      let bossHoverSpeed = 0.03 + (levelId * 0.005);
-      
-      // Default Target Position
-      let targetY = (CANVAS_HEIGHT - 320) + Math.sin(this.frameCount * bossHoverSpeed) * 60;
-      let targetX = boss.x; // Stay put horizontally by default (scrolling is managed by cameraX usually)
+      boss.frameTimer = (boss.frameTimer || 0) + 1;
+      const t = boss.frameTimer;
+      boss.y = (boss.targetY || boss.y) + Math.sin(t * 0.05) * 20;
 
-      // Aggressive swooping for higher levels
-      if (levelId >= 3 && boss.attackState === 'idle') {
-           // Occasionally swoop towards player Y
-           targetY += Math.sin(this.frameCount * 0.05) * 40;
-           targetX += Math.cos(this.frameCount * 0.04) * 2;
-      }
-      
-      if (boss.targetY !== undefined) {
-          // Smooth Lerp
-          boss.y += (targetY - boss.y) * 0.05;
-          // Add organic noise to X
-          boss.x += (Math.sin(this.frameCount * 0.1) * 0.5);
-      } else {
-          boss.targetY = targetY;
-      }
-      
-      // Safety Bounds
-      if (boss.y < 0) boss.y = 0;
-      if (boss.y > CANVAS_HEIGHT - 100) boss.y = CANVAS_HEIGHT - 100;
+      boss.animScaleX = 1 + Math.sin(t * 0.1) * 0.05;
+      boss.animScaleY = 1 + Math.cos(t * 0.1) * 0.05;
 
-      // 2. Breathing Animation (Squash & Stretch)
-      let breatheSpeed = 0.1;
-      let breatheIntensity = 0.03;
-      
-      // 3. State Machine & Coordination
-      if (boss.attackState === 'charging_beam') {
-          breatheSpeed = 0.4; // Rapid breathing
-          breatheIntensity = 0.1;
-          boss.x += (Math.random() - 0.5) * 6; // Violent Shaking
-          
-          // Suck in effect
-          boss.animScaleX = 0.9;
-          boss.animScaleY = 1.1;
-          
-      } else if (boss.attackState === 'firing_beam') {
-          // Recoil 
-          boss.x += 2; 
-          boss.animScaleX = 1.2; 
-          boss.animScaleY = 0.8;
-      } else {
-          // Idle Breathing
-          boss.animScaleX = 1.0 + Math.sin(this.frameCount * breatheSpeed) * breatheIntensity;
-          boss.animScaleY = 1.0 + Math.cos(this.frameCount * breatheSpeed) * breatheIntensity;
-      }
-      
-      // 4. Tentacle Inverse Kinematics / Physics
       if (boss.tentacles) {
-          boss.tentacles.forEach((tentacle, tIndex) => {
-             // Calculate target for the tip of the tentacle
-             let targetX = boss.x - 100;
-             let targetY = boss.y + 100;
-
-             // Dynamic Tentacle Logic based on Boss Type
-             if (boss.attackState === 'charging_beam') {
-                 // Curl in defensively
-                 targetX = boss.x + 40;
-                 targetY = boss.y + boss.h/2 + (tIndex % 2 === 0 ? -40 : 40);
-             } else if (boss.attackState === 'firing_beam') {
-                 // Flair out backwards dramatically
-                 targetX = boss.x + 200;
-                 targetY = boss.y + boss.h/2 + (tIndex - 1.5) * 120;
-             } else {
-                 // Idle / Hunting
-                 // Reach towards player slightly
-                 const reachFactor = 0.3;
-                 const px = this.player.x;
-                 const py = this.player.y;
-                 
-                 // Sine wave float
-                 const waveX = Math.sin(this.frameCount * 0.05 + tIndex) * 50;
-                 const waveY = Math.cos(this.frameCount * 0.07 + tIndex) * 50;
-                 
-                 targetX = boss.x - 60 + waveX + (px - boss.x) * reachFactor;
-                 targetY = boss.y + boss.h/2 + waveY + (py - boss.y) * reachFactor;
-             }
-
-             // Attach first segment to body
-             const attachX = boss.x + 40;
-             const attachY = boss.y + 60 + (tIndex * 20) - (boss.tentacles!.length * 10);
-             tentacle[0].x = attachX;
-             tentacle[0].y = attachY;
-
-             // Move other segments
-             for (let i = 1; i < tentacle.length; i++) {
-                 let destX, destY;
-                 
-                 if (i === tentacle.length - 1 && boss.attackState !== 'firing_beam') {
-                     destX = targetX;
-                     destY = targetY;
-                 } else {
-                     destX = tentacle[i-1].x;
-                     destY = tentacle[i-1].y;
-                 }
-                 
-                 // Lerp for organic lag
-                 const drag = 0.15 + (i * 0.02); 
-                 tentacle[i].x += (destX - tentacle[i].x) * drag;
-                 tentacle[i].y += (destY - tentacle[i].y) * drag;
-                 
-                 // Constraints (Distance)
-                 const dx = tentacle[i].x - tentacle[i-1].x;
-                 const dy = tentacle[i].y - tentacle[i-1].y;
-                 const dist = Math.sqrt(dx*dx + dy*dy);
-                 const maxLen = 25;
-                 if (dist > maxLen) {
-                     const angle = Math.atan2(dy, dx);
-                     tentacle[i].x = tentacle[i-1].x + Math.cos(angle) * maxLen;
-                     tentacle[i].y = tentacle[i-1].y + Math.sin(angle) * maxLen;
-                 }
-             }
+          boss.tentacles.forEach((tentacle, i) => {
+              const headX = boss.x + boss.w/2 + Math.cos(t * 0.05 + i) * 40;
+              const headY = boss.y + boss.h/2 + Math.sin(t * 0.05 + i) * 40;
+              
+              tentacle[0].x = headX;
+              tentacle[0].y = headY;
+              
+              for (let j = 1; j < tentacle.length; j++) {
+                  const prev = tentacle[j-1];
+                  const curr = tentacle[j];
+                  const dx = prev.x - curr.x;
+                  const dy = prev.y - curr.y;
+                  const dist = Math.sqrt(dx*dx + dy*dy);
+                  const segLen = 20;
+                  
+                  if (dist > 0) {
+                      const angle = Math.atan2(dy, dx);
+                      const targetX = prev.x - Math.cos(angle) * segLen;
+                      const targetY = prev.y - Math.sin(angle) * segLen;
+                      curr.x += (targetX - curr.x) * 0.1;
+                      curr.y += (targetY - curr.y) * 0.1;
+                      curr.x += Math.sin(t * 0.1 + j + i) * 2;
+                  }
+              }
           });
       }
 
-      // Attack Timers
       if (boss.attackTimer && boss.attackTimer > 0) {
           boss.attackTimer--;
-      }
-
-      // Beam Attack Execution
-      if (boss.attackState === 'charging_beam') {
-          if (boss.attackTimer === 0) {
+      } else {
+          if (boss.attackState === 'idle') {
+             if (Math.random() > 0.7) {
+                 boss.attackState = 'charging_beam';
+                 boss.attackTimer = 60;
+                 audio.playTone(100, 'sawtooth', 0.5);
+             } else {
+                 boss.attackTimer = 100;
+                 for(let i=-2; i<=2; i++) {
+                     this.shoot(boss, 6, -1, false);
+                 }
+             }
+          } else if (boss.attackState === 'charging_beam') {
               boss.attackState = 'firing_beam';
-              boss.attackTimer = 60; 
-              this.triggerShake(15);
-              audio.explode(); 
+              boss.attackTimer = 30;
               
-              // Beam visual width varies by level
-              const beamHeight = 50 + (levelId * 5);
-
               this.bullets.push({
-                 id: Math.random().toString(),
-                 type: 'beam',
-                 x: 0, 
-                 y: boss.y + boss.h / 2 - beamHeight/2, 
-                 w: boss.x + 40, // Originates from boss mouth
-                 h: beamHeight,
-                 vx: 0,
-                 vy: 0,
-                 color: levelId % 2 === 0 ? '#ff0000' : '#ff00ff', // Red or Purple beam
-                 direction: -1,
-                 isDead: false,
-                 hp: 60, 
-                 maxHp: 60,
-                 penetratesWalls: true,
-                 penetratesEnemies: true
+                  id: Math.random().toString(),
+                  type: 'beam',
+                  x: boss.x - 800,
+                  y: boss.y + boss.h/2 - 20,
+                  w: 800,
+                  h: 40,
+                  vx: 0, 
+                  vy: 0,
+                  color: COLOR_VENOM_SLIME,
+                  direction: -1,
+                  isDead: false,
+                  hp: 20,
+                  maxHp: 20
               });
-              
-              // Recoil Impulse
-              boss.vx = 8; 
-          }
-      } else if (boss.attackState === 'firing_beam') {
-          if (boss.attackTimer === 0) {
+              audio.shoot();
+          } else {
               boss.attackState = 'idle';
-              boss.attackTimer = Math.max(100, 200 - levelId * 10); 
+              boss.attackTimer = 120;
           }
-      } else if (boss.attackState === 'idle') {
-          if (boss.attackTimer === 0) {
-              const rand = Math.random();
-              const canBeam = true; // All bosses can beam now
-              const canSpore = levelId >= 2; 
-              
-              if (canBeam && rand < 0.35) {
-                   boss.attackState = 'charging_beam';
-                   boss.attackTimer = 90; 
-              } else if (canSpore && rand < 0.7) {
-                   this.performSporeRain(boss);
-                   boss.attackTimer = Math.max(80, 140 - levelId * 10);
-                   // Visual bump up
-                   boss.y -= 30; 
-              } else {
-                   this.performStandardShot(boss);
-                   boss.attackTimer = Math.max(50, 100 - levelId * 10);
-              }
-          }
-      }
-  }
-
-  // --- Boss Attack Helpers ---
-  performStandardShot(boss: Entity) {
-      const dx = (this.player.x + this.player.w/2) - (boss.x + boss.w/2);
-      const dy = (this.player.y + this.player.h/2) - (boss.y + boss.h/2);
-      const dist = Math.sqrt(dx*dx + dy*dy);
-      const speed = 8;
-      
-      const levelId = this.levelConfig.id;
-      const bulletColor = levelId % 2 === 0 ? COLOR_CARNAGE_SLIME : COLOR_VENOM_SLIME;
-
-      // Primary Aimed Shot
-      this.bullets.push({
-          id: Math.random().toString(),
-          type: 'bullet', x: boss.x + 20, y: boss.y + boss.h/2, w: 24, h: 24,
-          vx: (dx/dist) * speed, vy: (dy/dist) * speed,
-          color: bulletColor, direction: -1, isDead: false, hp: 1, maxHp: 1,
-          penetratesWalls: levelId >= 3,
-          penetratesEnemies: false
-      });
-
-      // Spread Shot (Level 3+)
-      if (levelId >= 3) {
-           this.bullets.push({
-              id: Math.random().toString(),
-              type: 'bullet', x: boss.x + 20, y: boss.y + boss.h/2 - 20, w: 16, h: 16,
-              vx: (dx/dist) * speed, vy: (dy/dist) * speed - 2,
-              color: bulletColor, direction: -1, isDead: false, hp: 1, maxHp: 1,
-              penetratesWalls: false,
-              penetratesEnemies: false
-          });
-          this.bullets.push({
-              id: Math.random().toString(),
-              type: 'bullet', x: boss.x + 20, y: boss.y + boss.h/2 + 20, w: 16, h: 16,
-              vx: (dx/dist) * speed, vy: (dy/dist) * speed + 2,
-              color: bulletColor, direction: -1, isDead: false, hp: 1, maxHp: 1,
-              penetratesWalls: false,
-              penetratesEnemies: false
-          });
-      }
-  }
-
-  performSporeRain(boss: Entity) {
-      const bulletColor = this.levelConfig.id % 2 === 0 ? COLOR_CARNAGE_SKIN : COLOR_SENSOR;
-      // Shoots projectiles upwards that fall down
-      for(let i=0; i<4; i++) {
-          this.bullets.push({
-              id: Math.random().toString(),
-              type: 'bullet',
-              x: boss.x + boss.w/2 + (Math.random() * 40 - 20),
-              y: boss.y + 20,
-              w: 16,
-              h: 16,
-              vx: -Math.random() * 8 - 4, // Leftward random arc
-              vy: -Math.random() * 6 - 8, // Upward
-              color: bulletColor, 
-              direction: -1,
-              isDead: false,
-              hp: 1,
-              maxHp: 1,
-              penetratesWalls: false,
-              penetratesEnemies: false
-          });
       }
   }
 
   draw() {
-    this.ctx.save();
+    this.ctx.fillStyle = this.levelConfig.theme.bgTop;
+    this.ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     
-    // Screen Shake
-    if (this.screenShake > 0) {
-        this.ctx.translate(
-            (Math.random() - 0.5) * this.screenShake, 
-            (Math.random() - 0.5) * this.screenShake
-        );
-    }
-
-    // 1. Draw PARALLAX Background
-    // Layer 0: Solid color
     const gradient = this.ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
     gradient.addColorStop(0, this.levelConfig.theme.bgTop);
     gradient.addColorStop(1, this.levelConfig.theme.bgBottom);
     this.ctx.fillStyle = gradient;
     this.ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    
-    // Layer 1: Slow Stars/Clouds (moves at 0.1x speed)
-    this.ctx.save();
-    this.ctx.fillStyle = 'rgba(255,255,255,0.2)';
-    for(let i=0; i<40; i++) {
-        // Calculate position relative to camera with parallax factor
-        const rawX = i * 200; 
-        const paraX = (rawX - this.cameraX * 0.1) % (CANVAS_WIDTH + 200);
-        // Handle wrapping for positive values
-        const drawX = paraX < 0 ? paraX + (CANVAS_WIDTH + 200) : paraX;
-        
-        const y = (i * 97) % CANVAS_HEIGHT;
-        const size = (i % 3) + 1;
-        this.ctx.fillRect(drawX - 100, y, size, size); // -100 offset to handle edge spawn
-    }
-    this.ctx.restore();
 
-    // Layer 2: Faster Mountains/Structures (moves at 0.3x speed)
     this.ctx.save();
-    this.ctx.fillStyle = 'rgba(0,0,0,0.1)';
-    for(let i=0; i<15; i++) {
-        const rawX = i * 300;
-        const paraX = (rawX - this.cameraX * 0.3) % (CANVAS_WIDTH + 400);
-        const drawX = paraX < 0 ? paraX + (CANVAS_WIDTH + 400) : paraX;
-        
-        const h = 100 + (i % 5) * 30;
-        this.ctx.beginPath();
-        this.ctx.moveTo(drawX - 100, CANVAS_HEIGHT);
-        this.ctx.lineTo(drawX + 50, CANVAS_HEIGHT - h);
-        this.ctx.lineTo(drawX + 200, CANVAS_HEIGHT);
-        this.ctx.fill();
-    }
-    this.ctx.restore();
     
-    // MAIN GAME LAYER
-    this.ctx.translate(-Math.floor(this.cameraX), 0);
+    if (this.screenShake > 0) {
+        const dx = (Math.random() - 0.5) * this.screenShake;
+        const dy = (Math.random() - 0.5) * this.screenShake;
+        this.ctx.translate(dx, dy);
+    }
+    
+    this.ctx.translate(-this.cameraX, 0);
 
-    // 2. Draw Platforms & Decorations
+    this.platforms.forEach(p => {
+        this.ctx.fillStyle = this.levelConfig.theme.platformBody;
+        this.ctx.fillRect(p.x, p.y, p.w, p.h);
+        this.ctx.fillStyle = this.levelConfig.theme.platformTop;
+        this.ctx.fillRect(p.x, p.y, p.w, 8);
+    });
+    
     this.decorations.forEach(d => {
-        if (d.type === 'decoration') {
-            this.drawBillboard(d);
+        this.ctx.fillStyle = d.color;
+        this.ctx.fillRect(d.x, d.y, d.w, d.h);
+        if (d.text) {
+             this.ctx.fillStyle = d.secondaryColor || '#000';
+             this.ctx.font = 'bold 8px monospace';
+             this.ctx.textAlign = 'center';
+             this.ctx.fillText(d.text, d.x + d.w/2, d.y + d.h/2 + 3);
         }
     });
 
-    this.platforms.forEach(p => {
-      this.ctx.fillStyle = this.levelConfig.theme.platformBody;
-      this.ctx.fillRect(p.x, p.y + 6, p.w, p.h - 6);
-      this.ctx.fillStyle = this.levelConfig.theme.platformTop;
-      this.ctx.fillRect(p.x, p.y, p.w, 8);
-      // Extra details (dripping slime for some levels)
-      if (this.levelConfig.id >= 2) {
-         this.ctx.fillStyle = 'rgba(0,0,0,0.2)';
-         this.ctx.fillRect(p.x, p.y + p.h, p.w, 5); 
-      }
-    });
-
-    // 3. Draw Entities
     this.enemies.forEach(e => {
-      if (e.type === 'boss') this.drawBoss(e);
-      else if (e.type === 'powerup') this.drawPowerUp(e);
-      else if (e.type === 'sensor') this.drawSensor(e);
-      else if (e.type !== 'decoration') this.drawSoldier(e);
+       if (e.type === 'boss') {
+           this.drawBoss(e);
+       } else if (e.type === 'powerup') {
+           this.ctx.fillStyle = e.color;
+           const s = 1 + Math.sin(this.frameCount * 0.2) * 0.2;
+           const w = e.w * s;
+           const h = e.h * s;
+           this.ctx.fillRect(e.x + (e.w-w)/2, e.y + (e.h-h)/2, w, h);
+           
+           this.ctx.fillStyle = '#fff';
+           this.ctx.font = 'bold 10px monospace';
+           this.ctx.textAlign = 'center';
+           let char = '?';
+           if (e.subType === 'health') char = '♥';
+           else if (e.subType === 'bomb_refill') char = 'B';
+           else if (e.subType === 'machine') char = 'M';
+           else if (e.subType === 'spread') char = 'S';
+           else if (e.subType === 'laser') char = 'L';
+           this.ctx.fillText(char, e.x + e.w/2, e.y + e.h/2 + 4);
+
+       } else if (e.type === 'sensor') {
+           this.ctx.fillStyle = e.color;
+           this.ctx.beginPath();
+           this.ctx.arc(e.x + e.w/2, e.y + e.h/2, e.w/2, 0, Math.PI*2);
+           this.ctx.fill();
+           if (Math.floor(this.frameCount / 10) % 2 === 0) {
+               this.ctx.fillStyle = '#ff0000';
+               this.ctx.beginPath();
+               this.ctx.arc(e.x + e.w/2, e.y + e.h/2, 5, 0, Math.PI*2);
+               this.ctx.fill();
+           }
+       } else {
+           this.ctx.fillStyle = e.color;
+           this.ctx.fillRect(e.x, e.y, e.w, e.h);
+           
+           this.ctx.fillStyle = COLOR_ENEMY_VISOR;
+           if (e.direction === 1) this.ctx.fillRect(e.x + e.w - 10, e.y + 6, 8, 4);
+           else this.ctx.fillRect(e.x + 2, e.y + 6, 8, 4);
+           
+           this.ctx.fillStyle = COLOR_ENEMY_VEST;
+           this.ctx.fillRect(e.x, e.y + 16, e.w, 12);
+           
+           this.ctx.fillStyle = '#000';
+           if (e.direction === 1) this.ctx.fillRect(e.x + e.w/2, e.y + 18, 24, 6);
+           else this.ctx.fillRect(e.x + e.w/2 - 24, e.y + 18, 24, 6);
+       }
     });
 
     if (!this.player.isDead) {
-      if (!this.player.invulnerableUntil || Date.now() > this.player.invulnerableUntil || Math.floor(Date.now() / 50) % 2 === 0) {
-          this.drawPlayer();
-      }
+        if (!this.player.invulnerableUntil || this.player.invulnerableUntil < Date.now() || Math.floor(Date.now() / 50) % 2 === 0) {
+            this.ctx.fillStyle = this.player.color;
+            this.ctx.fillRect(this.player.x, this.player.y, this.player.w, this.player.h);
+            
+            this.ctx.fillStyle = COLOR_PLAYER_HEADBAND;
+            this.ctx.fillRect(this.player.x, this.player.y + 4, this.player.w, 6);
+            if (this.player.direction === 1) this.ctx.fillRect(this.player.x - 4, this.player.y + 4, 6, 4);
+            else this.ctx.fillRect(this.player.x + this.player.w - 2, this.player.y + 4, 6, 4);
+
+            this.ctx.fillStyle = COLOR_PLAYER_PANTS;
+            this.ctx.fillRect(this.player.x, this.player.y + this.player.h - 16, this.player.w, 16);
+            
+            this.ctx.fillStyle = '#333';
+            if (this.player.direction === 1) this.ctx.fillRect(this.player.x + 12, this.player.y + 20, 20, 8);
+            else this.ctx.fillRect(this.player.x - 8, this.player.y + 20, 20, 8);
+        }
     }
 
-    // 5. Draw Bullets & Bombs & Beams
     this.bullets.forEach(b => {
-      if (b.type === 'beam') {
-          // Draw Hyper Beam
-          this.ctx.save();
-          // Warning flicker or Full Beam
-          
-          if (b.hp > 0) {
-               // Core Beam
-               this.ctx.fillStyle = b.color;
-               this.ctx.globalAlpha = 0.6 + Math.sin(this.frameCount) * 0.2;
-               this.ctx.fillRect(this.cameraX, b.y + 10, CANVAS_WIDTH, b.h - 20);
-               
-               // Inner White Core
-               this.ctx.fillStyle = '#fff';
-               this.ctx.globalAlpha = 0.9;
-               this.ctx.fillRect(this.cameraX, b.y + 25, CANVAS_WIDTH, 10);
-               
-               // Outer Glow
-               this.ctx.shadowBlur = 20;
-               this.ctx.shadowColor = b.color;
-          }
-          this.ctx.restore();
-          
-      } else if (b.type === 'explosion') {
-          // Draw Explosion
-          this.ctx.fillStyle = b.color;
-          this.ctx.beginPath();
-          this.ctx.arc(b.x + b.w/2, b.y + b.h/2, b.w/2 * (b.hp / 10), 0, Math.PI*2);
-          this.ctx.fill();
-          this.ctx.fillStyle = '#fff';
-          this.ctx.beginPath();
-          this.ctx.arc(b.x + b.w/2, b.y + b.h/2, b.w/4 * (b.hp / 10), 0, Math.PI*2);
-          this.ctx.fill();
-      } else if (b.type === 'bomb') {
-          // Draw Bomb
-          this.ctx.fillStyle = b.color;
-          this.ctx.beginPath();
-          this.ctx.arc(b.x, b.y, 6, 0, Math.PI*2);
-          this.ctx.fill();
-          // Flashing red light
-          this.ctx.fillStyle = (Math.floor(this.frameCount / 5) % 2 === 0) ? '#ef4444' : '#000';
-          this.ctx.beginPath();
-          this.ctx.arc(b.x + 2, b.y - 2, 2, 0, Math.PI*2);
-          this.ctx.fill();
-      } else {
-          // Regular Bullets
-          this.ctx.shadowBlur = 10;
-          this.ctx.shadowColor = b.color;
-          this.ctx.fillStyle = '#fff'; // White core
-          
-          this.ctx.beginPath();
-          if (b.color === COLOR_BULLET || b.color === COLOR_POWERUP_LASER) {
-              if (b.color === COLOR_POWERUP_LASER) {
-                   // Laser Shape
-                   this.ctx.shadowBlur = 15;
-                   this.ctx.fillStyle = COLOR_POWERUP_LASER;
-                   this.ctx.fillRect(b.x, b.y + 2, b.w, 6);
-                   this.ctx.fillStyle = '#fff';
-                   this.ctx.fillRect(b.x + 2, b.y + 3, b.w - 4, 4);
-              } else {
-                  // Player Bullet (Round)
-                  this.ctx.arc(b.x, b.y, b.w/2, 0, Math.PI * 2);
-              }
-          } else {
-              // Enemy Slime Bullet (Wobbly)
-              const r = b.w/2;
-              const wobble = Math.sin(this.frameCount * 0.5) * 2;
-              this.ctx.arc(b.x, b.y, r + wobble, 0, Math.PI * 2);
-              this.ctx.fillStyle = b.color; // Slime color full fill
-          }
-          this.ctx.fill();
-          this.ctx.shadowBlur = 0;
-      }
+        if (b.type === 'beam') {
+            this.ctx.fillStyle = b.color;
+            this.ctx.globalAlpha = 0.8;
+            this.ctx.fillRect(b.x, b.y, b.w, b.h);
+            this.ctx.fillStyle = '#fff';
+            this.ctx.fillRect(b.x, b.y + 10, b.w, b.h - 20);
+            this.ctx.globalAlpha = 1.0;
+        } else if (b.type === 'explosion') {
+            this.ctx.fillStyle = b.color;
+            this.ctx.beginPath();
+            this.ctx.arc(b.x + b.w/2, b.y + b.h/2, b.w/2 * (b.hp/10), 0, Math.PI*2);
+            this.ctx.fill();
+        } else if (b.type === 'bomb') {
+            this.ctx.fillStyle = b.color;
+            this.ctx.beginPath();
+            this.ctx.arc(b.x + b.w/2, b.y + b.h/2, b.w/2, 0, Math.PI*2);
+            this.ctx.fill();
+            if (Math.random() > 0.5) {
+                this.ctx.fillStyle = '#ffcc00';
+                this.ctx.fillRect(b.x + b.w/2 - 1, b.y - 4, 2, 2);
+            }
+        } else {
+            this.ctx.fillStyle = b.color;
+            this.ctx.fillRect(b.x, b.y, b.w, b.h);
+        }
     });
-    
-    // 6. Draw Particles
+
     this.particles.forEach(p => {
-      this.ctx.globalAlpha = Math.max(0, p.life);
-      
-      if (p.text) {
-          // Floating Text
-          this.ctx.fillStyle = '#fff';
-          this.ctx.shadowColor = '#000';
-          this.ctx.shadowOffsetX = 2;
-          this.ctx.shadowOffsetY = 2;
-          this.ctx.font = '10px "Press Start 2P"';
-          this.ctx.textAlign = 'center';
-          this.ctx.fillText(p.text, p.x, p.y);
-          this.ctx.shadowOffsetX = 0;
-          this.ctx.shadowOffsetY = 0;
-      } else {
-          // Standard Rect Particle
-          this.ctx.fillStyle = p.color;
-          this.ctx.fillRect(p.x, p.y, p.w, p.h);
-      }
+        if (p.text) {
+             this.ctx.fillStyle = p.color;
+             this.ctx.font = 'bold 10px monospace';
+             this.ctx.textAlign = 'center';
+             this.ctx.fillText(p.text, p.x, p.y);
+        } else {
+             this.ctx.fillStyle = p.color;
+             this.ctx.globalAlpha = p.life;
+             this.ctx.fillRect(p.x, p.y, p.w, p.h);
+             this.ctx.globalAlpha = 1.0;
+        }
     });
-    this.ctx.globalAlpha = 1.0;
 
     this.ctx.restore();
-
-    // 7. HUD
-    if (this.victoryTimer === 0 || Math.floor(this.frameCount / 10) % 2 === 0) {
-         this.drawHUD();
-    }
-    
-    if (this.isGameOver) {
-       this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-       this.ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-       this.ctx.fillStyle = '#ef4444';
-       this.ctx.font = '40px "Press Start 2P"';
-       this.ctx.textAlign = 'center';
-       this.ctx.fillText("MISSION FAILED", CANVAS_WIDTH/2, CANVAS_HEIGHT/2);
-    }
-  }
-  
-  drawBillboard(d: Entity) {
-      // Legs
-      this.ctx.fillStyle = '#475569';
-      this.ctx.fillRect(d.x + 10, d.y + d.h, 6, 20);
-      this.ctx.fillRect(d.x + d.w - 16, d.y + d.h, 6, 20);
-      
-      // Board Background
-      this.ctx.fillStyle = '#0f172a'; // Dark frame
-      this.ctx.fillRect(d.x - 2, d.y - 2, d.w + 4, d.h + 4);
-      
-      this.ctx.fillStyle = d.color;
-      this.ctx.fillRect(d.x, d.y, d.w, d.h);
-      
-      // Text
-      if (d.text) {
-          this.ctx.fillStyle = d.secondaryColor || '#000';
-          this.ctx.font = 'bold 8px monospace';
-          this.ctx.textAlign = 'center';
-          this.ctx.textBaseline = 'middle';
-          
-          // Split text if too long
-          if (d.text.length > 8) {
-              const parts = d.text.split(' ');
-              this.ctx.fillText(parts[0], d.x + d.w/2, d.y + d.h/3);
-              this.ctx.fillText(parts[1] || '', d.x + d.w/2, d.y + d.h*0.7);
-          } else {
-              this.ctx.fillText(d.text, d.x + d.w/2, d.y + d.h/2);
-          }
-      }
-      
-      // Shine animation
-      const shinePos = (this.frameCount * 2) % (d.w + 40) - 20;
-      this.ctx.fillStyle = 'rgba(255,255,255,0.2)';
-      this.ctx.beginPath();
-      this.ctx.moveTo(d.x + shinePos, d.y);
-      this.ctx.lineTo(d.x + shinePos + 10, d.y);
-      this.ctx.lineTo(d.x + shinePos - 10, d.y + d.h);
-      this.ctx.lineTo(d.x + shinePos - 20, d.y + d.h);
-      this.ctx.fill();
-  }
-  
-  drawPowerUp(e: Entity) {
-      // FALCON CAPSULE STYLE
-      this.ctx.shadowBlur = 15;
-      this.ctx.shadowColor = e.color;
-      
-      const centerX = e.x + e.w / 2;
-      const centerY = e.y + e.h / 2;
-      
-      // Wings
-      this.ctx.fillStyle = '#e2e8f0'; // Silver wings
-      this.ctx.beginPath();
-      const wingSpread = Math.sin(this.frameCount * 0.2) * 2; // Flapping
-      this.ctx.moveTo(centerX, centerY + 10);
-      this.ctx.lineTo(centerX - 24, centerY - 8 + wingSpread);
-      this.ctx.lineTo(centerX - 16, centerY + 6 + wingSpread);
-      this.ctx.lineTo(centerX, centerY + 10);
-      this.ctx.lineTo(centerX + 16, centerY + 6 + wingSpread);
-      this.ctx.lineTo(centerX + 24, centerY - 8 + wingSpread);
-      this.ctx.fill();
-
-      // Capsule Body (Silver/Grey Container)
-      this.ctx.fillStyle = '#cbd5e1';
-      this.ctx.beginPath();
-      this.ctx.ellipse(centerX, centerY, 14, 18, 0, 0, Math.PI*2);
-      this.ctx.fill();
-      
-      // Inner Color (Weapon Type)
-      this.ctx.fillStyle = e.color;
-      this.ctx.beginPath();
-      this.ctx.ellipse(centerX, centerY, 10, 14, 0, 0, Math.PI*2);
-      this.ctx.fill();
-      
-      // Letter
-      this.ctx.shadowBlur = 0;
-      this.ctx.fillStyle = '#fff';
-      this.ctx.font = '700 14px monospace';
-      this.ctx.textAlign = 'center';
-      this.ctx.textBaseline = 'middle';
-      
-      let symbol = 'S';
-      if (e.subType === 'machine') symbol = 'M';
-      if (e.subType === 'health') symbol = '+';
-      if (e.subType === 'bomb_refill') symbol = 'B';
-      if (e.subType === 'laser') symbol = 'L';
-      
-      this.ctx.fillText(symbol, centerX, centerY + 1);
-  }
-  
-  drawSensor(e: Entity) {
-      // Symbiote Spore Sensor
-      this.ctx.fillStyle = COLOR_SENSOR;
-      this.ctx.beginPath();
-      this.ctx.arc(e.x + e.w/2, e.y + e.h/2, e.w/2, 0, Math.PI*2);
-      this.ctx.fill();
-      
-      // Veins
-      this.ctx.strokeStyle = '#a855f7';
-      this.ctx.lineWidth = 2;
-      this.ctx.beginPath();
-      this.ctx.moveTo(e.x + 5, e.y + 5);
-      this.ctx.lineTo(e.x + e.w - 5, e.y + e.h - 5);
-      this.ctx.stroke();
-
-      // Blinking eye
-      this.ctx.fillStyle = (Math.floor(this.frameCount / 10) % 2 === 0) ? '#ef4444' : '#000';
-      this.ctx.beginPath();
-      this.ctx.arc(e.x + e.w/2, e.y + e.h/2, e.w/4, 0, Math.PI*2);
-      this.ctx.fill();
-  }
-
-  drawPlayer() {
-    const p = this.player;
-    const isMoving = Math.abs(p.vx) > 0;
-    const isCrouching = this.input.down;
-    const bob = isMoving ? Math.sin(this.frameCount * 0.4) * 3 : 0;
-    const dir = p.direction;
-
-    // Adjust drawing Y base based on crouch
-    // If crouching, we essentially ignore the top half of the bounding box
-    const drawY = isCrouching ? p.y + 24 : p.y; 
-    
-    // Pants
-    this.ctx.fillStyle = COLOR_PLAYER_PANTS;
-    if (isCrouching) {
-        // Squatting legs (wide base)
-        this.ctx.fillRect(p.x + 2, drawY + 20, 20, 4);
-        this.ctx.fillRect(p.x + 2, drawY + 14, 6, 6); // Left knee
-        this.ctx.fillRect(p.x + 16, drawY + 14, 6, 6); // Right knee
-    } else {
-        // Standing legs
-        this.ctx.fillRect(p.x + (dir === 1 ? 2 : 14), drawY + 28 + bob, 8, 20);
-        this.ctx.fillRect(p.x + (dir === 1 ? 14 : 2), drawY + 28 - bob, 8, 20);
-        // Boots
-        this.ctx.fillStyle = '#111';
-        this.ctx.fillRect(p.x + (dir === 1 ? 2 : 14), drawY + 44 + bob, 10, 4);
-        this.ctx.fillRect(p.x + (dir === 1 ? 14 : 2), drawY + 44 - bob, 10, 4);
-    }
-
-    // Torso (Vest)
-    this.ctx.fillStyle = COLOR_PLAYER; 
-    this.ctx.fillRect(p.x + 4, drawY + 12 + (isCrouching ? 0 : bob), 16, 16);
-    this.ctx.fillStyle = '#1e3a8a'; 
-    this.ctx.fillRect(p.x + 4, drawY + 18 + (isCrouching ? 0 : bob), 16, 10);
-
-    // Head
-    this.ctx.fillStyle = COLOR_PLAYER;
-    this.ctx.fillRect(p.x + 6, drawY + (isCrouching ? 2 : bob), 12, 12);
-    
-    // Headband
-    this.ctx.fillStyle = COLOR_PLAYER_HEADBAND;
-    this.ctx.fillRect(p.x + 5, drawY + 2 + (isCrouching ? 2 : bob), 14, 4);
-    if (isMoving && !isCrouching) {
-        this.ctx.fillRect(p.x + (dir === 1 ? -6 : 18), drawY + 4 + bob + Math.sin(this.frameCount) * 3, 8, 3);
-    }
-
-    // Gun
-    this.ctx.fillStyle = '#1f2937';
-    if (this.input.up) {
-       this.ctx.fillRect(p.x + 8, drawY - 10 + bob, 4, 30);
-       this.ctx.fillRect(p.x + 6, drawY + 10 + bob, 8, 6);
-    } else {
-       // Crouch gun position
-       const gunY = drawY + 16 + (isCrouching ? 0 : bob);
-       this.ctx.fillRect(p.x + (dir === 1 ? 8 : -12), gunY, 28, 6);
-       this.ctx.fillRect(p.x + (dir === 1 ? 4 : 16), gunY, 4, 8);
-    }
-  }
-
-  drawSoldier(e: Entity) {
-      // CAPYBARA DRAWING LOGIC (Realistic Pixel Art Style)
-      const bob = Math.sin(this.frameCount * 0.2) * 2;
-      const dir = e.vx > 0 ? 1 : -1;
-      const flip = dir === -1;
-      
-      // Colors
-      const furColor = COLOR_CAPYBARA_FUR; // #8B4513
-      const noseColor = COLOR_CAPYBARA_NOSE; // Dark Nose
-      const legColor = '#5D4037'; // Darker limbs
-      
-      // 1. Draw Legs (Background/Far side)
-      // Animated slightly opposite to body bob
-      const legAnim = Math.sin(this.frameCount * 0.4) * 4;
-      
-      this.ctx.fillStyle = legColor;
-      // Back Leg (Far)
-      this.ctx.fillRect(e.x + (flip ? e.w - 14 : 10) - legAnim, e.y + e.h - 8, 5, 8);
-      // Front Leg (Far)
-      this.ctx.fillRect(e.x + (flip ? 10 : e.w - 14) + legAnim, e.y + e.h - 8, 5, 8);
-
-      // 2. Draw Main Body (The "Loaf")
-      this.ctx.fillStyle = furColor;
-      // Main block (rounded top and bottom by omitting corners)
-      this.ctx.fillRect(e.x + 2, e.y + 8 + bob, e.w - 4, e.h - 12);
-      // Top roundness
-      this.ctx.fillRect(e.x + 4, e.y + 6 + bob, e.w - 8, 2);
-      // Bottom roundness
-      this.ctx.fillRect(e.x + 4, e.y + e.h - 4 + bob, e.w - 8, 2);
-      
-      // 3. Draw Head
-      // Capybaras have a very rectangular, boxy head
-      const headW = 18;
-      const headH = 16;
-      // Head position depends on direction
-      const headX = flip ? e.x - 2 : e.x + e.w - headW + 2;
-      const headY = e.y + 4 + bob;
-
-      this.ctx.fillStyle = furColor;
-      this.ctx.fillRect(headX, headY, headW, headH);
-      
-      // Snout shading (darker bridge)
-      this.ctx.fillStyle = '#793e11'; 
-      const snoutX = flip ? headX : headX + 8;
-      this.ctx.fillRect(snoutX, headY, 10, 6);
-
-      // Nose (Nostrils)
-      this.ctx.fillStyle = noseColor;
-      const noseX = flip ? headX : headX + headW - 4;
-      this.ctx.fillRect(noseX, headY + 4, 4, 5);
-
-      // Ear (Small rounded flap on top)
-      this.ctx.fillStyle = COLOR_CAPYBARA_EAR;
-      const earX = flip ? headX + 12 : headX + 2;
-      this.ctx.fillRect(earX, headY - 2, 4, 4);
-
-      // Eye (Chill expression - Half closed)
-      this.ctx.fillStyle = '#000';
-      const eyeX = flip ? headX + 8 : headX + 6;
-      const eyeY = headY + 5;
-      this.ctx.fillRect(eyeX, eyeY, 3, 3); // Pupil
-      // Heavy Eyelid
-      this.ctx.fillStyle = '#5D4037';
-      this.ctx.fillRect(eyeX, headY + 4, 4, 2);
-
-      // 4. Draw Legs (Foreground/Near side)
-      this.ctx.fillStyle = furColor;
-      // Back Leg (Near)
-      this.ctx.fillRect(e.x + (flip ? e.w - 14 : 10) + legAnim, e.y + e.h - 10 + bob, 5, 10);
-      // Front Leg (Near)
-      this.ctx.fillRect(e.x + (flip ? 10 : e.w - 14) - legAnim, e.y + e.h - 10 + bob, 5, 10);
-
-      // 5. Weapon (Strap and Gun)
-      this.ctx.fillStyle = '#222';
-      const gunX = e.x + e.w/2 - 6;
-      const gunY = e.y + 10 + bob;
-      
-      // Gun body (Receiver)
-      this.ctx.fillRect(gunX, gunY, 12, 12);
-      
-      // Barrel
-      this.ctx.fillStyle = '#111';
-      if (flip) {
-          this.ctx.fillRect(e.x - 5, gunY + 4, 15, 4);
-      } else {
-          this.ctx.fillRect(e.x + e.w - 10, gunY + 4, 15, 4);
-      }
-      
-      // Strap
-      this.ctx.fillStyle = '#3e2723';
-      this.ctx.fillRect(gunX + 4, gunY - 2, 4, 14);
+    this.drawHUD();
   }
 
   drawBoss(boss: Entity) {
@@ -1585,47 +1165,38 @@ export class GameEngine {
 
       const t = this.frameCount;
       const levelId = this.levelConfig.id;
-      const isCarnage = levelId % 2 === 0; 
       
-      const mainColor = isCarnage ? COLOR_CARNAGE_SKIN : COLOR_VENOM_SKIN;
-      const slimeColor = isCarnage ? COLOR_CARNAGE_SLIME : COLOR_VENOM_SLIME;
-
-      // Determine Boss Type Visuals
-      const isTypeA = levelId <= 2;
-      const isTypeB = levelId >= 3 && levelId <= 5;
-      const isTypeC = levelId >= 6;
+      // Boss Archetypes
+      const isTank = levelId <= 2; 
+      const isFlyer = levelId >= 3 && levelId <= 5;
+      // const isChaos = levelId >= 6; // Implicit else
 
       // Center pivot for scaling
       const cx = boss.x + boss.w/2;
       const cy = boss.y + boss.h/2;
       
       this.ctx.translate(cx, cy);
-      
-      // Robust Scale (prevent NaN or zero)
       const sx = Math.max(0.1, boss.animScaleX || 1);
       const sy = Math.max(0.1, boss.animScaleY || 1);
       this.ctx.scale(sx, sy);
       
       // FORCE VISIBILITY: Glow/Shadow
-      // Ensure boss is visible even on dark backgrounds
       this.ctx.shadowBlur = 20;
       this.ctx.shadowColor = '#ffffff';
 
-      // --- 1. IK TENTACLES (Back Layer) ---
-      if (boss.tentacles && boss.tentacles.length > 0) {
+      // --- 1. IK TENTACLES (Back Layer for Chaos/Flyer) ---
+      // We rely on else logic for Chaos, so check levelId for Tentacles
+      if ((levelId >= 3) && boss.tentacles && boss.tentacles.length > 0) {
           this.ctx.lineCap = 'round';
           this.ctx.lineJoin = 'round';
           
-          boss.tentacles.forEach((tentacle, i) => {
+          boss.tentacles.forEach((tentacle) => {
               if (!tentacle || tentacle.length < 2) return;
-
-              // Tentacles are relative to center after translate
               const startX = tentacle[0].x - cx;
               const startY = tentacle[0].y - cy;
               
-              // Draw Main Tentacle Path
               this.ctx.beginPath();
-              this.ctx.strokeStyle = '#000'; // Outline
+              this.ctx.strokeStyle = '#000'; 
               this.ctx.lineWidth = 14;
               this.ctx.moveTo(startX, startY);
               
@@ -1633,116 +1204,124 @@ export class GameEngine {
                    const p0 = tentacle[j-1];
                    const p1 = tentacle[j];
                    if (!p0 || !p1) continue;
-
                    const midX = (p0.x + p1.x) / 2 - cx;
                    const midY = (p0.y + p1.y) / 2 - cy;
                    this.ctx.quadraticCurveTo(p0.x - cx, p0.y - cy, midX, midY);
               }
               this.ctx.stroke();
-
-              // Inner Color
-              this.ctx.strokeStyle = mainColor;
+              
+              this.ctx.strokeStyle = COLOR_VENOM_SKIN;
               this.ctx.lineWidth = 10;
               this.ctx.stroke();
           });
       }
 
-      // --- 2. MAIN BODY ---
+      // --- 2. MAIN BODY DRAWING ---
       
-      // Core Body Base
-      this.ctx.fillStyle = '#000'; 
-      const baseR = boss.w / 2;
-      
-      if (isTypeA) {
-          // BLOB SHAPE - Draw a reliable circle instead of ellipse for robustness
+      if (isTank) {
+          // THE BEHEMOTH (Tank Style)
+          this.ctx.fillStyle = COLOR_BOSS_ARMOR;
+          // Main hull
+          this.ctx.fillRect(-80, -40, 160, 80);
+          // Treads
+          this.ctx.fillStyle = '#000';
+          this.ctx.fillRect(-90, 20, 180, 40);
+          // Tread details
+          const treadAnim = (t % 20) * 4;
+          this.ctx.fillStyle = '#555';
+          for(let i=0; i<5; i++) {
+              this.ctx.fillRect(-80 + i*35 - treadAnim + (treadAnim > 35 ? 175 : 0), 30, 20, 20);
+          }
+          // Turret
+          this.ctx.fillStyle = COLOR_BOSS_ARMOR;
           this.ctx.beginPath();
-          // Fallback: ellipse replacement using arc and scale
-          this.ctx.save();
-          this.ctx.scale(1, 0.9);
-          this.ctx.arc(0, 10, baseR, 0, Math.PI*2);
-          this.ctx.restore();
+          this.ctx.arc(0, -40, 50, Math.PI, 0);
           this.ctx.fill();
+          // Cannon
+          this.ctx.fillStyle = '#111';
+          this.ctx.fillRect(-60, -60, 40, 20); // Gun barrel left
           
-          this.ctx.fillStyle = mainColor;
+          // Eye / Core
+          this.ctx.fillStyle = COLOR_BOSS_CORE;
           this.ctx.beginPath();
-          this.ctx.save();
-          this.ctx.scale(1, 0.9);
-          this.ctx.arc(0, 10, baseR - 4, 0, Math.PI*2);
-          this.ctx.restore();
+          this.ctx.arc(-20, -30, 15, 0, Math.PI*2);
           this.ctx.fill();
 
-      } else if (isTypeB) {
-          // SPIKY CARAPACE
+      } else if (isFlyer) {
+          // THE HIVE MIND (Brain Style)
+          this.ctx.fillStyle = '#000';
+          // Brain dome
           this.ctx.beginPath();
-          this.ctx.moveTo(-50, -60);
-          this.ctx.lineTo(0, -80); 
-          this.ctx.lineTo(50, -60);
-          this.ctx.lineTo(70, 0);
-          this.ctx.lineTo(0, 70); 
-          this.ctx.lineTo(-70, 0);
-          this.ctx.fill(); // Black BG
+          this.ctx.ellipse(0, 0, 70, 50, 0, 0, Math.PI*2);
+          this.ctx.fill();
           
-          this.ctx.fillStyle = mainColor;
+          this.ctx.fillStyle = 'rgba(255, 255, 255, 0.2)'; // Glass shine
           this.ctx.beginPath();
-          this.ctx.moveTo(-45, -55);
-          this.ctx.lineTo(0, -75); 
-          this.ctx.lineTo(45, -55);
-          this.ctx.lineTo(65, 0);
-          this.ctx.lineTo(0, 65);
-          this.ctx.lineTo(-65, 0);
-          this.ctx.fill(); 
+          this.ctx.ellipse(0, 0, 60, 40, 0, 0, Math.PI*2);
+          this.ctx.fill();
+          
+          // Brain folds
+          // Use dynamic color based on level variant (red vs green) for visual flair
+          const isCarnage = levelId % 2 === 0;
+          this.ctx.strokeStyle = isCarnage ? COLOR_CARNAGE_SLIME : COLOR_VENOM_SLIME;
+          this.ctx.lineWidth = 4;
+          this.ctx.beginPath();
+          this.ctx.moveTo(-40, 0);
+          this.ctx.bezierCurveTo(-20, -30, 20, -30, 40, 0);
+          this.ctx.bezierCurveTo(20, 30, -20, 30, -40, 0);
+          this.ctx.stroke();
+          
+          // Tech bits
+          this.ctx.fillStyle = COLOR_BOSS_ARMOR;
+          this.ctx.fillRect(-80, -10, 20, 20);
+          this.ctx.fillRect(60, -10, 20, 20);
 
       } else {
-          // CHAOS CLOUD
+          // THE ABOMINATION (Chaos Style)
           this.ctx.fillStyle = '#000';
           this.ctx.beginPath();
-          this.ctx.arc(0, 0, 50, 0, Math.PI*2);
+          const spikes = 12;
+          const outerRadius = 70;
+          const innerRadius = 40;
+          
+          // Rotating Spikey ball
+          this.ctx.save();
+          this.ctx.rotate(t * 0.05);
+          for (let i = 0; i < spikes; i++) {
+              let angle = (i / spikes) * Math.PI * 2;
+              let x = Math.cos(angle) * outerRadius;
+              let y = Math.sin(angle) * outerRadius;
+              this.ctx.lineTo(x, y);
+              angle += (Math.PI / spikes);
+              x = Math.cos(angle) * innerRadius;
+              y = Math.sin(angle) * innerRadius;
+              this.ctx.lineTo(x, y);
+          }
+          this.ctx.closePath();
           this.ctx.fill();
-          this.ctx.fillStyle = mainColor;
+          this.ctx.restore();
+          
+          // Core
+          this.ctx.fillStyle = COLOR_CARNAGE_SKIN;
           this.ctx.beginPath();
-          this.ctx.arc(0, 0, 40, 0, Math.PI*2);
+          this.ctx.arc(0, 0, 30, 0, Math.PI*2);
+          this.ctx.fill();
+          
+          // Crazy Eyes
+          this.ctx.fillStyle = '#fff';
+          this.ctx.beginPath();
+          this.ctx.arc(-10 + Math.sin(t*0.2)*5, -10, 8, 0, Math.PI*2);
+          this.ctx.fill();
+          this.ctx.beginPath();
+          this.ctx.arc(15 + Math.cos(t*0.3)*5, 5, 12, 0, Math.PI*2);
           this.ctx.fill();
       }
 
-      // --- 3. EYES & FACE (Simple Tracking) ---
-      
-      const px = this.player.x + this.player.w/2;
-      const py = this.player.y + this.player.h/2;
-      const dx = px - (boss.x + boss.w/2);
-      const dy = py - (boss.y + boss.h/2);
-      const dist = Math.sqrt(dx*dx + dy*dy) || 1;
-      
-      const trackX = (dx / dist) * 10;
-      const trackY = (dy / dist) * 10;
-
-      // Always draw big eyes for visibility
-      this.ctx.fillStyle = '#fff';
-      
-      // Left Eye
-      this.ctx.beginPath();
-      this.ctx.arc(-30, -20, 12, 0, Math.PI*2);
-      this.ctx.fill();
-      
-      // Right Eye
-      this.ctx.beginPath();
-      this.ctx.arc(30, -20, 12, 0, Math.PI*2);
-      this.ctx.fill();
-      
-      // Pupils
-      this.ctx.fillStyle = '#000';
-      this.ctx.beginPath(); 
-      this.ctx.arc(-30 + trackX, -20 + trackY, 4, 0, Math.PI*2); 
-      this.ctx.fill();
-      this.ctx.beginPath(); 
-      this.ctx.arc(30 + trackX, -20 + trackY, 4, 0, Math.PI*2); 
-      this.ctx.fill();
-
       // DEBUG / FALLBACK RING
-      // If for some reason the boss is invisible, this red ring will show
-      this.ctx.strokeStyle = 'rgba(255, 0, 0, 0.2)';
+      this.ctx.strokeStyle = 'rgba(255, 0, 0, 0.1)';
       this.ctx.lineWidth = 2;
       this.ctx.beginPath();
-      this.ctx.arc(0, 0, boss.w/2 + 20, 0, Math.PI*2);
+      this.ctx.arc(0, 0, boss.w/2 + 10, 0, Math.PI*2);
       this.ctx.stroke();
 
       this.ctx.restore();

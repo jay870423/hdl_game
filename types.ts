@@ -16,6 +16,7 @@ export interface Rect {
 }
 
 export type EntityType = 'player' | 'enemy' | 'boss' | 'bullet' | 'particle' | 'powerup' | 'sensor' | 'bomb' | 'explosion' | 'beam' | 'decoration';
+export type EnemyClass = 'runner' | 'sniper' | 'drone'; // New enemy tactical classes
 export type WeaponType = 'normal' | 'spread' | 'machine' | 'laser';
 export type PowerUpType = 'spread' | 'machine' | 'laser' | 'health' | 'bomb_refill';
 
@@ -27,6 +28,7 @@ export interface Point {
 export interface Entity extends Rect {
   id: string;
   type: EntityType;
+  enemyClass?: EnemyClass; // Distinct behavior tag
   vx: number;
   vy: number;
   color: string;
